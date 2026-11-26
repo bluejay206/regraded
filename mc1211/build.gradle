@@ -21,6 +21,13 @@ dependencies {
 
 loom {
     splitEnvironmentSourceSets()
+
+    mods {
+        "regraded" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
 }
 
 processResources {
