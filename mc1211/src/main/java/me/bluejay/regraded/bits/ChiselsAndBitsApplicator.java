@@ -15,6 +15,7 @@ import java.lang.reflect.Method;
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
     private static String lastFailure = "";
+    private static boolean listed;
 
     @Override
     public boolean isAvailable() {
@@ -40,24 +41,25 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
                 return false;
             }
 
-            Method getBitAccess = api.getClass().getMethod("getBitAccess", World.class, BlockPos.class);
-            Object access = getBitAccess.invoke(api, world, pos);
-            if (access == null) {
-                lastFailure = "getBitAccess returned null";
+            if (!listed) {
+                listed = true;
+                StringBuilder sb = new StringBuilder("API methods: ");
+                for (Method m : api.getClass().getMethods()) {
+                    if (m.getDeclaringClass() == Object.class) continue;
+                    sb.append(m.getName()).append('(');
+                    Class<?>[] params = m.getParameterTypes();
+                    for (int i = 0; i < params.length; i++) {
+                        if (i > 0) sb.append(',');
+                        sb.append(params[i].getSimpleName());
+                    }
+                    sb.append(") ");
+                }
+                lastFailure = sb.toString();
                 return false;
             }
 
-            Class<?> infoClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
-            Method create = infoClass.getMethod("create", BlockState.class);
-            Object info = create.invoke(null, material);
-
-            Method setBitAt = access.getClass().getMethod("setBitAt", int.class, int.class, int.class, infoClass);
-            setBitAt.invoke(access, x, y, z, info);
-
-            Method commit = access.getClass().getMethod("commitChanges", boolean.class);
-            commit.invoke(access, true);
-            lastFailure = "";
-            return true;
+            lastFailure = "methods listed; no write yet";
+            return false;
         } catch (Throwable t) {
             lastFailure = t.getClass().getSimpleName() + ": " + t.getMessage();
             return false;
