@@ -7,6 +7,10 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 
+/**
+ * End-rod particles at each loaded survey point. Toggle with Ctrl-Z.
+ * Coordinate convention matches LevelHeaded: easting = X, northing = -Z.
+ */
 public final class PointMarkers {
     private static boolean visible;
 
@@ -17,13 +21,10 @@ public final class PointMarkers {
     public static void toggle() {
         visible = !visible;
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player != null) {
+        if (client.player != null && client.inGameHud != null) {
             int count = Points.size();
             String msg = visible ? "ReGraded markers on (" + count + " points)" : "ReGraded markers off";
-            client.player.sendMessage(Text.literal(msg), false);
-            if (client.inGameHud != null) {
-                client.inGameHud.setOverlayMessage(Text.literal(msg), false);
-            }
+            client.inGameHud.setOverlayMessage(Text.literal(msg), false);
         }
     }
 
