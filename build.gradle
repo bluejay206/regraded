@@ -1,0 +1,8 @@
+plugins {
+    id 'base'
+}
+
+subprojects {
+    group = 'me.bluejay'
+    version = '0.1.0'
+}

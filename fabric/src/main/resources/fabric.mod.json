@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "regraded",
+  "version": "${version}",
+  "name": "ReGraded",
+  "description": "Regrade terrain from survey CSV as bit-resolution surface layers.",
+  "authors": ["bluejay"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["me.bluejay.regraded.ReGraded"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}
