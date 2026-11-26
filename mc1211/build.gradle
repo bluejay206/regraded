@@ -17,7 +17,6 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 
     implementation project(':core')
-    include project(':core')
 }
 
 loom {
@@ -39,4 +38,8 @@ java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
     withSourcesJar()
+}
+
+jar {
+    from(project(':core').sourceSets.main.output)
 }
