@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
@@ -47,6 +47,7 @@ public final class PointMarkers {
         if (!visible) return;
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.world == null || client.player == null) return;
+        if (context.matrixStack() == null || context.consumers() == null) return;
         List<SurveyPoint> pts = Points.list().points();
         if (pts.size() < 2) return;
 
@@ -64,7 +65,7 @@ public final class PointMarkers {
             double bx = b.easting() - cam.x;
             double by = b.elevation() - cam.y;
             double bz = -b.northing() - cam.z;
-            VertexRendering.drawBox(
+            WorldRenderer.drawBox(
                     matrices, lines,
                     Math.min(ax, bx), Math.min(ay, by), Math.min(az, bz),
                     Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz),
