@@ -35,7 +35,9 @@ public final class RgCommands {
                                         .then(Commands.literal("raycast")
                                                 .executes(ctx -> regradeBlockRaycast(ctx.getSource()))))
                                 .then(Commands.literal("chunk")
-                                        .executes(ctx -> regradeChunk(ctx.getSource()))))
+                                        .executes(ctx -> regradeChunk(ctx.getSource()))
+                                        .then(Commands.literal("raycast")
+                                                .executes(ctx -> regradeChunkRaycast(ctx.getSource())))))
                         .then(Commands.literal("clear")
                                 .executes(ctx -> {
                                     Points.clear();
@@ -104,6 +106,27 @@ public final class RgCommands {
         }
         ChunkPos chunk = new ChunkPos(BlockPos.containing(source.getPosition()));
         source.sendSuccess(() -> Component.literal("Regrade chunk " + chunk.x + "," + chunk.z + " queued (" + Points.size() + " points, TIN)."), false);
+        return 1;
+    }
+
+    private static int regradeChunkRaycast(CommandSourceStack source) {
+        if (Points.size() == 0) {
+            source.sendFailure(Component.literal("No points loaded. Use /rg import <csv> first."));
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Raycast requires a player."));
+            return 0;
+        }
+        HitResult hit = player.pick(RAY_RANGE, 1.0f, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            source.sendFailure(Component.literal("No block in look direction."));
+            return 0;
+        }
+        BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+        ChunkPos chunk = new ChunkPos(pos);
+        source.sendSuccess(() -> Component.literal("Regrade chunk under raycast " + chunk.x + "," + chunk.z + " queued (" + Points.size() + " points, TIN)."), false);
         return 1;
     }
 }
