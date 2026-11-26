@@ -14,10 +14,11 @@ for %%a in (%*) do (
     if /i "%%a" == "-norun" set NORUN=1
     if /i "%%a" == "-clear" set CLEAR=1
     if /i "%%a" == "-1211" set TARGET=mc1211
+    if /i "%%a" == "-all" set NORUN=1
 )
 
 :: mc262 and mc263 are paused until Chisels & Bits is available for those versions.
-:: Only mc1211 is built.
+:: Only mc1211 is built. -all means build without launching.
 
 echo [Cleanup] Archiving old build logs and source zips...
 if not exist old_logs mkdir old_logs
