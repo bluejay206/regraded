@@ -1,6 +1,7 @@
 package me.bluejay.regraded.command;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import me.bluejay.regraded.client.JobStore;
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.regrade.Regrade;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -43,6 +44,7 @@ public final class RgCommands {
                         .then(CommandManager.literal("clear")
                                 .executes(ctx -> {
                                     Points.clear();
+                                    JobStore.save();
                                     ctx.getSource().sendFeedback(() -> Text.literal("Point list cleared."), false);
                                     return 1;
                                 }))
@@ -63,6 +65,7 @@ public final class RgCommands {
             }
             String csv = Files.readString(path);
             int added = Points.list().importCsv(csv);
+            JobStore.save();
             source.sendFeedback(() -> Text.literal("Imported " + added + " points (total " + Points.size() + ") from " + path.getFileName()), false);
             return 1;
         } catch (Exception e) {
@@ -79,7 +82,7 @@ public final class RgCommands {
         ServerWorld world = source.getWorld();
         BlockPos pos = BlockPos.ofFloored(source.getPosition());
         int written = Regrade.block(world, pos);
-        source.sendFeedback(() -> Text.literal("Regraded block/column at " + pos.getX() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
+        source.sendFeedback(() -> Text.literal("Regraded block at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
         return 1;
     }
 
