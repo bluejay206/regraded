@@ -7,11 +7,11 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,7 +19,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Ctrl-Z overlay: white particle column at each point, plus TIN edge lines.
+ * Ctrl-Z overlay: white particle column at each point, plus TIN edge lines
+ * drawn at the surface elevations of the endpoints.
  * Coordinate convention: easting = X, northing = -Z.
  */
 public final class PointMarkers {
@@ -53,23 +54,25 @@ public final class PointMarkers {
 
         Vec3d cam = context.camera().getPos();
         MatrixStack matrices = context.matrixStack();
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
         VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
 
         List<int[]> edges = tinEdges(pts);
         for (int[] e : edges) {
             SurveyPoint a = pts.get(e[0]);
             SurveyPoint b = pts.get(e[1]);
-            double ax = a.easting() - cam.x;
-            double ay = a.elevation() - cam.y;
-            double az = -a.northing() - cam.z;
-            double bx = b.easting() - cam.x;
-            double by = b.elevation() - cam.y;
-            double bz = -b.northing() - cam.z;
-            WorldRenderer.drawBox(
-                    matrices, lines,
-                    Math.min(ax, bx), Math.min(ay, by), Math.min(az, bz),
-                    Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz),
-                    1f, 1f, 1f, 0.8f);
+            float ax = (float) (a.easting() - cam.x);
+            float ay = (float) (a.elevation() - cam.y);
+            float az = (float) (-a.northing() - cam.z);
+            float bx = (float) (b.easting() - cam.x);
+            float by = (float) (b.elevation() - cam.y);
+            float bz = (float) (-b.northing() - cam.z);
+            float dx = bx - ax, dy = by - ay, dz = bz - az;
+            float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1e-4f) continue;
+            float nx = dx / len, ny = dy / len, nz = dz / len;
+            lines.vertex(matrix, ax, ay, az).color(1f, 1f, 1f, 0.9f).normal(nx, ny, nz);
+            lines.vertex(matrix, bx, by, bz).color(1f, 1f, 1f, 0.9f).normal(nx, ny, nz);
         }
     }
 
