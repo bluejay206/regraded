@@ -11,6 +11,8 @@ public final class ReGradedKeybinds {
     public static final String CATEGORY = "key.categories.regraded";
     public static KeyBinding TOGGLE_MARKERS;
 
+    private static boolean rawZWasDown;
+
     private ReGradedKeybinds() {}
 
     public static void register() {
@@ -25,16 +27,15 @@ public final class ReGradedKeybinds {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
-            if (TOGGLE_MARKERS != null && isCtrlDown(client) && TOGGLE_MARKERS.wasPressed()) {
+            // KeyBinding.wasPressed never fires for Z. Use raw Ctrl-Z.
+            boolean rawZ = InputUtil.isKeyPressed(client.getWindow().getHandle(), GLFW.GLFW_KEY_Z);
+            boolean ctrl = InputUtil.isKeyPressed(client.getWindow().getHandle(), GLFW.GLFW_KEY_LEFT_CONTROL)
+                    || InputUtil.isKeyPressed(client.getWindow().getHandle(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+            if (rawZ && ctrl && !rawZWasDown) {
                 PointMarkers.toggle();
             }
+            rawZWasDown = rawZ;
             PointMarkers.tick(client);
         });
-    }
-
-    private static boolean isCtrlDown(MinecraftClient client) {
-        long handle = client.getWindow().getHandle();
-        return InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_LEFT_CONTROL)
-                || InputUtil.isKeyPressed(handle, GLFW.GLFW_KEY_RIGHT_CONTROL);
     }
 }
