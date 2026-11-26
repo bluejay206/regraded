@@ -9,6 +9,13 @@ pluginManagement {
     }
 }
 
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'regraded'
+
 include 'core'
-include 'fabric'
+include 'mc1211'
+include 'mc262'
+include 'mc263'

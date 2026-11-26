@@ -8,23 +8,25 @@ echo ========================================
 :: Parse arguments
 set "NORUN=0"
 set "CLEAR=0"
-set "TARGET=fabric"
+set "TARGET=mc1211"
 
 for %%a in (%*) do (
     if /i "%%a" == "-norun" set NORUN=1
     if /i "%%a" == "-clear" set CLEAR=1
+    if /i "%%a" == "-1211" set TARGET=mc1211
+    if /i "%%a" == "-262" set TARGET=mc262
+    if /i "%%a" == "-263" set TARGET=mc263
+    if /i "%%a" == "-all" set TARGET=all
 )
 
 echo [Cleanup] Archiving old build logs and source zips...
 if not exist old_logs mkdir old_logs
 if not exist old_builds mkdir old_builds
 
-:: Move previous build logs into old_logs
 for %%f in (build_*.log run_output.log) do (
     if exist "%%f" move "%%f" old_logs\ >nul
 )
 
-:: Move previous source zips into old_builds
 for %%f in (src*.zip) do (
     if exist "%%f" move "%%f" old_builds\ >nul
 )
@@ -56,7 +58,9 @@ if %CLEAR%==1 (
     taskkill /f /im java.exe 2>nul
     if exist .gradle rd /s /q .gradle 2>nul
     if exist build rd /s /q build 2>nul
-    if exist fabric\build rd /s /q fabric\build 2>nul
+    if exist mc1211\build rd /s /q mc1211\build 2>nul
+    if exist mc262\build rd /s /q mc262\build 2>nul
+    if exist mc263\build rd /s /q mc263\build 2>nul
     if exist core\build rd /s /q core\build 2>nul
 )
 
@@ -64,31 +68,74 @@ echo Running clean...
 call gradlew clean --quiet
 
 set OVERALL=pass
-set RESULT_FABRIC=skip
+set RESULT_MC1211=skip
+set RESULT_MC262=skip
+set RESULT_MC263=skip
 
-echo.
-echo ========== Building :fabric ==========
-set "LOG_FABRIC=build_fabric_%dt:~2,6%_%dt:~8,4%_b%BUILD_NUM%.log"
-call gradlew :fabric:build > "!LOG_FABRIC!" 2>&1
-if !errorlevel! equ 0 (
-    set RESULT_FABRIC=pass
-    echo [fabric SUCCESS]
-    if %NORUN%==0 (
-        echo.
-        echo Launching :fabric:runClient...
-        call gradlew :fabric:runClient > run_output.log 2>&1
+if "%TARGET%"=="all" (
+    echo.
+    echo ========== Building :mc1211 ==========
+    set "LOG_MC1211=build_mc1211_%dt:~2,6%_%dt:~8,4%_b%BUILD_NUM%.log"
+    call gradlew :mc1211:build > "!LOG_MC1211!" 2>&1
+    if !errorlevel! equ 0 (
+        set RESULT_MC1211=pass
+        echo [mc1211 SUCCESS]
+    ) else (
+        set RESULT_MC1211=fail
+        set OVERALL=fail
+        echo [mc1211 FAILED] log: !LOG_MC1211!
+    )
+
+    echo.
+    echo ========== Building :mc262 ==========
+    set "LOG_MC262=build_mc262_%dt:~2,6%_%dt:~8,4%_b%BUILD_NUM%.log"
+    call gradlew :mc262:build > "!LOG_MC262!" 2>&1
+    if !errorlevel! equ 0 (
+        set RESULT_MC262=pass
+        echo [mc262 SUCCESS]
+    ) else (
+        set RESULT_MC262=fail
+        set OVERALL=fail
+        echo [mc262 FAILED] log: !LOG_MC262!
+    )
+
+    echo.
+    echo ========== Building :mc263 ==========
+    set "LOG_MC263=build_mc263_%dt:~2,6%_%dt:~8,4%_b%BUILD_NUM%.log"
+    call gradlew :mc263:build > "!LOG_MC263!" 2>&1
+    if !errorlevel! equ 0 (
+        set RESULT_MC263=pass
+        echo [mc263 SUCCESS]
+    ) else (
+        set RESULT_MC263=fail
+        set OVERALL=fail
+        echo [mc263 FAILED] log: !LOG_MC263!
     )
 ) else (
-    set RESULT_FABRIC=fail
-    set OVERALL=fail
-    echo [fabric FAILED] log: !LOG_FABRIC!
+    echo.
+    echo ========== Building :%TARGET% ==========
+    set "LOG_SINGLE=build_%TARGET%_%dt:~2,6%_%dt:~8,4%_b%BUILD_NUM%.log"
+    call gradlew :%TARGET%:build > "!LOG_SINGLE!" 2>&1
+    if !errorlevel! equ 0 (
+        set RESULT_%TARGET%=pass
+        echo [%TARGET% SUCCESS]
+        if %NORUN%==0 (
+            echo.
+            echo Launching :%TARGET%:runClient...
+            call gradlew :%TARGET%:runClient > run_output.log 2>&1
+        )
+    ) else (
+        set RESULT_%TARGET%=fail
+        set OVERALL=fail
+        echo [%TARGET% FAILED] log: !LOG_SINGLE!
+    )
 )
 
 set CSVFILE=Build_Status.csv
 if not exist %CSVFILE% (
-    echo timestamp,build_number,overall,fabric,zip_filename,git_short_hash > %CSVFILE%
+    echo timestamp,build_number,overall,mc1211,mc262,mc263,zip_filename,git_short_hash > %CSVFILE%
 )
-echo %TIMESTAMP%,%BUILD_NUM%,%OVERALL%,%RESULT_FABRIC%,%ZIPFILE%,%GIT_HASH% >> %CSVFILE%
+echo %TIMESTAMP%,%BUILD_NUM%,%OVERALL%,%RESULT_MC1211%,%RESULT_MC262%,%RESULT_MC263%,%ZIPFILE%,%GIT_HASH% >> %CSVFILE%
 
 echo.
 echo Creating zip: %ZIPFILE%
@@ -96,28 +143,28 @@ set "STAGE=%TEMP%\rg_stage_%BUILD_NUM%"
 if exist "%STAGE%" rd /s /q "%STAGE%"
 mkdir "%STAGE%"
 
-:: Root files
-for %%f in (build.gradle settings.gradle prepareBuild.bat README.md LICENSE) do (
+for %%f in (build.gradle gradle.properties settings.gradle prepareBuild.bat README.md LICENSE) do (
     if exist "%%f" copy /y "%%f" "%STAGE%\" >nul
 )
 
-:: Sources (exclude build, .gradle, run)
-for %%d in (core fabric) do (
+for %%d in (core mc1211 mc262 mc263) do (
     if exist "%%d" (
         robocopy "%%d" "%STAGE%\%%d" /E /XD build .gradle run /NFL /NDL /NJH /NJS /NC /NS >nul
     )
 )
 
-:: Jars
-if exist "fabric\build\libs" (
-    mkdir "%STAGE%\fabric\libs" 2>nul
-    copy /y "fabric\build\libs\regraded-*.jar" "%STAGE%\fabric\libs\" >nul 2>&1
+for %%t in (mc1211 mc262 mc263) do (
+    if exist "%%t\build\libs" (
+        mkdir "%STAGE%\%%t\libs" 2>nul
+        copy /y "%%t\build\libs\regraded-*.jar" "%STAGE%\%%t\libs\" >nul 2>&1
+    )
 )
 
-:: Build logs
-if exist "!LOG_FABRIC!" (
-    mkdir "%STAGE%\fabric\logs" 2>nul
-    copy /y "!LOG_FABRIC!" "%STAGE%\fabric\logs\" >nul 2>&1
+for %%t in (mc1211 mc262 mc263) do (
+    if exist "build_%%t_*.log" (
+        mkdir "%STAGE%\%%t\logs" 2>nul
+        copy /y "build_%%t_*.log" "%STAGE%\%%t\logs\" >nul 2>&1
+    )
 )
 if exist run_output.log (
     mkdir "%STAGE%\logs" 2>nul
@@ -140,6 +187,5 @@ if exist run_output.log del run_output.log
 taskkill /f /im java.exe 2>nul
 
 echo.
-echo Build #%BUILD_NUM% overall=%OVERALL%  fabric=%RESULT_FABRIC%
-echo Log: !LOG_FABRIC!
+echo Build #%BUILD_NUM% overall=%OVERALL%  mc1211=%RESULT_MC1211%  mc262=%RESULT_MC262%  mc263=%RESULT_MC263%
 echo Previous logs archived to old_logs\

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "regraded",
+  "version": "${version}",
+  "name": "ReGraded",
+  "description": "Chunk-level terrain regrading from survey CSV (26.2).",
+  "authors": ["bluejay"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["me.bluejay.regraded.ReGraded"],
+    "client": ["me.bluejay.regraded.client.ReGradedClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.2",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "bitsandchisels": "*"
+  }
+}
