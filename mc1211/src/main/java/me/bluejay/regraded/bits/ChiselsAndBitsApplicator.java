@@ -15,7 +15,7 @@ import java.lang.reflect.Method;
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
     private static String lastFailure = "";
-    private static boolean listed;
+    private static String methodList = "";
 
     @Override
     public boolean isAvailable() {
@@ -41,9 +41,8 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
                 return false;
             }
 
-            if (!listed) {
-                listed = true;
-                StringBuilder sb = new StringBuilder("API methods: ");
+            if (methodList.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
                 for (Method m : api.getClass().getMethods()) {
                     if (m.getDeclaringClass() == Object.class) continue;
                     sb.append(m.getName()).append('(');
@@ -54,11 +53,9 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
                     }
                     sb.append(") ");
                 }
-                lastFailure = sb.toString();
-                return false;
+                methodList = sb.toString();
             }
-
-            lastFailure = "methods listed; no write yet";
+            lastFailure = methodList;
             return false;
         } catch (Throwable t) {
             lastFailure = t.getClass().getSimpleName() + ": " + t.getMessage();
