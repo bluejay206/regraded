@@ -115,7 +115,8 @@ public final class RgCommands {
         }
         ServerWorld world = source.getWorld();
         ChunkPos chunk = new ChunkPos(BlockPos.ofFloored(source.getPosition()));
-        int written = Regrade.chunk(world, chunk);
+        int surfaceY = (int) Math.floor(source.getPosition().y);
+        int written = Regrade.chunk(world, chunk, surfaceY);
         source.sendFeedback(() -> Text.literal("Regraded chunk " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
         return 1;
     }
@@ -138,7 +139,7 @@ public final class RgCommands {
         ServerWorld world = source.getWorld();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         ChunkPos chunk = new ChunkPos(pos);
-        int written = Regrade.chunk(world, chunk);
+        int written = Regrade.chunk(world, chunk, pos.getY());
         source.sendFeedback(() -> Text.literal("Regraded chunk under raycast " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
         return 1;
     }

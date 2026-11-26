@@ -41,12 +41,21 @@ public final class Regrade {
         return written;
     }
 
-    public static int chunk(ServerWorld world, ChunkPos chunk) {
+    /**
+     * Regrade the chunk at the given Y. Each column uses the TIN elevation
+     * to pick the block that should hold the surface bits.
+     */
+    public static int chunk(ServerWorld world, ChunkPos chunk, int surfaceY) {
         int written = 0;
-        int baseY = world.getBottomY();
+        List<SurveyPoint> pts = Points.list().points();
+        if (pts.isEmpty()) return 0;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                BlockPos pos = new BlockPos(chunk.getStartX() + x, baseY, chunk.getStartZ() + z);
+                double wx = chunk.getStartX() + x + 0.5;
+                double wz = chunk.getStartZ() + z + 0.5;
+                double elev = TinSurface.elevationAt(pts, wx, wz);
+                int blockY = Double.isNaN(elev) ? surfaceY : (int) Math.floor(elev);
+                BlockPos pos = new BlockPos(chunk.getStartX() + x, blockY, chunk.getStartZ() + z);
                 written += block(world, pos);
             }
         }

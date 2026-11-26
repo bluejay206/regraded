@@ -5,6 +5,8 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 
@@ -15,6 +17,8 @@ import java.lang.reflect.Method;
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
+    private static final Logger LOG = LoggerFactory.getLogger("ReGraded");
+    private static boolean loggedFailure;
 
     @Override
     public boolean isAvailable() {
@@ -37,17 +41,21 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
 
     private boolean tryChiselsAndBits(World world, BlockPos pos, int x, int y, int z, BlockState material) {
         try {
-            // IChiselsAndBitsAPI.getInstance().getBitAccess(world, pos)
             Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
             Method getInstance = apiClass.getMethod("getInstance");
             Object api = getInstance.invoke(null);
-            if (api == null) return false;
+            if (api == null) {
+                logOnce("C&B API getInstance returned null");
+                return false;
+            }
 
             Method getBitAccess = api.getClass().getMethod("getBitAccess", World.class, BlockPos.class);
             Object access = getBitAccess.invoke(api, world, pos);
-            if (access == null) return false;
+            if (access == null) {
+                logOnce("C&B getBitAccess returned null");
+                return false;
+            }
 
-            // setBitAt(int x, int y, int z, BlockInformation)
             Class<?> infoClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
             Method create = infoClass.getMethod("create", BlockState.class);
             Object info = create.invoke(null, material);
@@ -58,8 +66,16 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             Method commit = access.getClass().getMethod("commitChanges", boolean.class);
             commit.invoke(access, true);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            logOnce("C&B reflection failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
             return false;
+        }
+    }
+
+    private static void logOnce(String msg) {
+        if (!loggedFailure) {
+            loggedFailure = true;
+            LOG.warn(msg);
         }
     }
 
