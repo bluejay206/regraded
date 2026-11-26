@@ -2,10 +2,12 @@ package me.bluejay.regraded.command;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import me.bluejay.regraded.core.Points;
+import me.bluejay.regraded.regrade.Regrade;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -74,8 +76,10 @@ public final class RgCommands {
             source.sendError(Text.literal("No points loaded. Use /rg import <csv> first."));
             return 0;
         }
+        ServerWorld world = source.getWorld();
         BlockPos pos = BlockPos.ofFloored(source.getPosition());
-        source.sendFeedback(() -> Text.literal("Regrade block/column at " + pos.getX() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
+        int written = Regrade.block(world, pos);
+        source.sendFeedback(() -> Text.literal("Regraded block/column at " + pos.getX() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
         return 1;
     }
 
@@ -94,8 +98,10 @@ public final class RgCommands {
             source.sendError(Text.literal("No block in look direction."));
             return 0;
         }
+        ServerWorld world = source.getWorld();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
-        source.sendFeedback(() -> Text.literal("Regrade block/column under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
+        int written = Regrade.block(world, pos);
+        source.sendFeedback(() -> Text.literal("Regraded block under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
         return 1;
     }
 
@@ -104,8 +110,10 @@ public final class RgCommands {
             source.sendError(Text.literal("No points loaded. Use /rg import <csv> first."));
             return 0;
         }
+        ServerWorld world = source.getWorld();
         ChunkPos chunk = new ChunkPos(BlockPos.ofFloored(source.getPosition()));
-        source.sendFeedback(() -> Text.literal("Regrade chunk " + chunk.x + "," + chunk.z + " queued (" + Points.size() + " points, TIN)."), false);
+        int written = Regrade.chunk(world, chunk);
+        source.sendFeedback(() -> Text.literal("Regraded chunk " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
         return 1;
     }
 
@@ -124,9 +132,11 @@ public final class RgCommands {
             source.sendError(Text.literal("No block in look direction."));
             return 0;
         }
+        ServerWorld world = source.getWorld();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         ChunkPos chunk = new ChunkPos(pos);
-        source.sendFeedback(() -> Text.literal("Regrade chunk under raycast " + chunk.x + "," + chunk.z + " queued (" + Points.size() + " points, TIN)."), false);
+        int written = Regrade.chunk(world, chunk);
+        source.sendFeedback(() -> Text.literal("Regraded chunk under raycast " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
         return 1;
     }
 }
