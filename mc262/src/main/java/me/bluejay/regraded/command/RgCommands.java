@@ -7,7 +7,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +19,8 @@ import java.nio.file.Path;
  * /rg command tree (Mojang / 26.2).
  */
 public final class RgCommands {
+    private static final double RAY_RANGE = 100.0;
+
     private RgCommands() {}
 
     public static void register() {
@@ -26,7 +31,9 @@ public final class RgCommands {
                                         .executes(ctx -> importCsv(ctx.getSource(), StringArgumentType.getString(ctx, "path")))))
                         .then(Commands.literal("regrade")
                                 .then(Commands.literal("block")
-                                        .executes(ctx -> regradeBlock(ctx.getSource())))
+                                        .executes(ctx -> regradeBlock(ctx.getSource()))
+                                        .then(Commands.literal("raycast")
+                                                .executes(ctx -> regradeBlockRaycast(ctx.getSource()))))
                                 .then(Commands.literal("chunk")
                                         .executes(ctx -> regradeChunk(ctx.getSource()))))
                         .then(Commands.literal("clear")
@@ -67,6 +74,26 @@ public final class RgCommands {
         }
         BlockPos pos = BlockPos.containing(source.getPosition());
         source.sendSuccess(() -> Component.literal("Regrade block/column at " + pos.getX() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
+        return 1;
+    }
+
+    private static int regradeBlockRaycast(CommandSourceStack source) {
+        if (Points.size() == 0) {
+            source.sendFailure(Component.literal("No points loaded. Use /rg import <csv> first."));
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Raycast requires a player."));
+            return 0;
+        }
+        HitResult hit = player.pick(RAY_RANGE, 1.0f, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            source.sendFailure(Component.literal("No block in look direction."));
+            return 0;
+        }
+        BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+        source.sendSuccess(() -> Component.literal("Regrade block/column under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
         return 1;
     }
 

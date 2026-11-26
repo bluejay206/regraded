@@ -5,7 +5,10 @@ import me.bluejay.regraded.core.Points;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 
@@ -16,6 +19,8 @@ import java.nio.file.Path;
  * /rg command tree (Yarn / 1.21.1).
  */
 public final class RgCommands {
+    private static final double RAY_RANGE = 100.0;
+
     private RgCommands() {}
 
     public static void register() {
@@ -26,7 +31,9 @@ public final class RgCommands {
                                         .executes(ctx -> importCsv(ctx.getSource(), StringArgumentType.getString(ctx, "path")))))
                         .then(CommandManager.literal("regrade")
                                 .then(CommandManager.literal("block")
-                                        .executes(ctx -> regradeBlock(ctx.getSource())))
+                                        .executes(ctx -> regradeBlock(ctx.getSource()))
+                                        .then(CommandManager.literal("raycast")
+                                                .executes(ctx -> regradeBlockRaycast(ctx.getSource()))))
                                 .then(CommandManager.literal("chunk")
                                         .executes(ctx -> regradeChunk(ctx.getSource()))))
                         .then(CommandManager.literal("clear")
@@ -67,6 +74,26 @@ public final class RgCommands {
         }
         BlockPos pos = BlockPos.ofFloored(source.getPosition());
         source.sendFeedback(() -> Text.literal("Regrade block/column at " + pos.getX() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
+        return 1;
+    }
+
+    private static int regradeBlockRaycast(ServerCommandSource source) {
+        if (Points.size() == 0) {
+            source.sendError(Text.literal("No points loaded. Use /rg import <csv> first."));
+            return 0;
+        }
+        ServerPlayerEntity player = source.getPlayer();
+        if (player == null) {
+            source.sendError(Text.literal("Raycast requires a player."));
+            return 0;
+        }
+        HitResult hit = player.raycast(RAY_RANGE, 1.0f, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            source.sendError(Text.literal("No block in look direction."));
+            return 0;
+        }
+        BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+        source.sendFeedback(() -> Text.literal("Regrade block/column under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " queued (" + Points.size() + " points, TIN)."), false);
         return 1;
     }
 
