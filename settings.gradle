@@ -11,3 +11,4 @@ pluginManagement {
 
 rootProject.name = 'regraded'
 include 'core'
+include 'fabric'
