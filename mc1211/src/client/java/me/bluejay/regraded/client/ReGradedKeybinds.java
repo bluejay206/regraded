@@ -21,6 +21,8 @@ public final class ReGradedKeybinds {
                 CATEGORY
         ));
 
+        PointMarkers.registerRender();
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
             if (TOGGLE_MARKERS != null && isCtrlDown(client) && TOGGLE_MARKERS.wasPressed()) {
