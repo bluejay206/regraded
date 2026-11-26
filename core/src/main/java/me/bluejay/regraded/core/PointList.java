@@ -59,4 +59,19 @@ public final class PointList {
         }
         return added;
     }
+
+    /** PNEZD CSV suitable for re-import. */
+    public String toCsv() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Point,Northing,Easting,Elevation,Description\n");
+        for (SurveyPoint p : points) {
+            sb.append(p.id()).append(',')
+                    .append(p.northing()).append(',')
+                    .append(p.easting()).append(',')
+                    .append(p.elevation()).append(',')
+                    .append(p.description() == null ? "" : p.description())
+                    .append('\n');
+        }
+        return sb.toString();
+    }
 }
