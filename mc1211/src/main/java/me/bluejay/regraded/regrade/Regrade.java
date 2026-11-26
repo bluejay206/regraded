@@ -14,6 +14,7 @@ import java.util.List;
 
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
+ * Only the surface block and the adjacent blocks above and below are written.
  * Coordinate convention: SurveyPoint.easting = world X, northing = world Z.
  */
 public final class Regrade {
@@ -21,42 +22,50 @@ public final class Regrade {
 
     private Regrade() {}
 
-    public static int block(ServerWorld world, BlockPos origin) {
+    /**
+     * Regrade the surface at the given column. Writes bits in the block at the
+     * TIN elevation and the blocks immediately above and below it.
+     */
+    public static int column(ServerWorld world, int x, int z) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
+        double elev = TinSurface.elevationAt(pts, x + 0.5, z + 0.5);
+        if (Double.isNaN(elev)) return 0;
+
+        int surfaceY = (int) Math.floor(elev);
         BlockState mat = ChiselsAndBitsApplicator.defaultMaterial();
         BitApplicator app = BitApplicator.current();
         int written = 0;
-        for (int bx = 0; bx < BITS; bx++) {
-            for (int bz = 0; bz < BITS; bz++) {
-                double wx = origin.getX() + (bx + 0.5) / BITS;
-                double wz = origin.getZ() + (bz + 0.5) / BITS;
-                double elev = TinSurface.elevationAt(pts, wx, wz);
-                if (Double.isNaN(elev)) continue;
-                int by = (int) Math.round((elev - origin.getY()) * BITS);
-                by = Math.max(0, Math.min(BITS - 1, by));
-                if (app.setBit(world, origin, bx, by, bz, mat)) written++;
+
+        // Surface block and the one above and below.
+        for (int dy = -1; dy <= 1; dy++) {
+            BlockPos origin = new BlockPos(x, surfaceY + dy, z);
+            double blockBase = origin.getY();
+            for (int bx = 0; bx < BITS; bx++) {
+                for (int bz = 0; bz < BITS; bz++) {
+                    double wx = x + (bx + 0.5) / BITS;
+                    double wz = z + (bz + 0.5) / BITS;
+                    double localElev = TinSurface.elevationAt(pts, wx, wz);
+                    if (Double.isNaN(localElev)) continue;
+                    double bitY = (localElev - blockBase) * BITS;
+                    int by = (int) Math.floor(bitY);
+                    if (by < 0 || by >= BITS) continue;
+                    if (app.setBit(world, origin, bx, by, bz, mat)) written++;
+                }
             }
         }
         return written;
     }
 
-    /**
-     * Regrade the chunk at the given Y. Each column uses the TIN elevation
-     * to pick the block that should hold the surface bits.
-     */
-    public static int chunk(ServerWorld world, ChunkPos chunk, int surfaceY) {
+    public static int block(ServerWorld world, BlockPos origin) {
+        return column(world, origin.getX(), origin.getZ());
+    }
+
+    public static int chunk(ServerWorld world, ChunkPos chunk, int unusedSurfaceY) {
         int written = 0;
-        List<SurveyPoint> pts = Points.list().points();
-        if (pts.isEmpty()) return 0;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                double wx = chunk.getStartX() + x + 0.5;
-                double wz = chunk.getStartZ() + z + 0.5;
-                double elev = TinSurface.elevationAt(pts, wx, wz);
-                int blockY = Double.isNaN(elev) ? surfaceY : (int) Math.floor(elev);
-                BlockPos pos = new BlockPos(chunk.getStartX() + x, blockY, chunk.getStartZ() + z);
-                written += block(world, pos);
+                written += column(world, chunk.getStartX() + x, chunk.getStartZ() + z);
             }
         }
         return written;

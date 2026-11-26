@@ -2,14 +2,25 @@ package me.bluejay.regraded.client;
 
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.core.SurveyPoint;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
- * White particle column at each loaded survey point. Toggle with Ctrl-Z.
- * Coordinate convention matches LevelHeaded: easting = X, northing = -Z.
+ * Ctrl-Z overlay: white particle column at each point, plus TIN edge lines.
+ * Coordinate convention: easting = X, northing = -Z.
  */
 public final class PointMarkers {
     private static boolean visible;
@@ -29,7 +40,66 @@ public final class PointMarkers {
     }
 
     public static void registerRender() {
-        // WorldRenderEvents box removed. Particles only.
+        WorldRenderEvents.AFTER_ENTITIES.register(PointMarkers::renderTin);
+    }
+
+    private static void renderTin(WorldRenderContext context) {
+        if (!visible) return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null || client.player == null) return;
+        List<SurveyPoint> pts = Points.list().points();
+        if (pts.size() < 2) return;
+
+        Vec3d cam = context.camera().getPos();
+        MatrixStack matrices = context.matrixStack();
+        VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
+
+        List<int[]> edges = tinEdges(pts);
+        for (int[] e : edges) {
+            SurveyPoint a = pts.get(e[0]);
+            SurveyPoint b = pts.get(e[1]);
+            double ax = a.easting() - cam.x;
+            double ay = a.elevation() - cam.y;
+            double az = -a.northing() - cam.z;
+            double bx = b.easting() - cam.x;
+            double by = b.elevation() - cam.y;
+            double bz = -b.northing() - cam.z;
+            VertexRendering.drawBox(
+                    matrices, lines,
+                    Math.min(ax, bx), Math.min(ay, by), Math.min(az, bz),
+                    Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz),
+                    1f, 1f, 1f, 0.8f);
+        }
+    }
+
+    /** Nearest-neighbor edges: each point connects to its two closest neighbors. */
+    private static List<int[]> tinEdges(List<SurveyPoint> pts) {
+        Set<String> seen = new HashSet<>();
+        List<int[]> edges = new ArrayList<>();
+        int n = pts.size();
+        for (int i = 0; i < n; i++) {
+            SurveyPoint p = pts.get(i);
+            int n1 = -1, n2 = -1;
+            double d1 = Double.MAX_VALUE, d2 = Double.MAX_VALUE;
+            for (int j = 0; j < n; j++) {
+                if (i == j) continue;
+                SurveyPoint q = pts.get(j);
+                double dx = p.easting() - q.easting();
+                double dz = p.northing() - q.northing();
+                double d = dx * dx + dz * dz;
+                if (d < d1) { d2 = d1; n2 = n1; d1 = d; n1 = j; }
+                else if (d < d2) { d2 = d; n2 = j; }
+            }
+            if (n1 >= 0) addEdge(seen, edges, i, n1);
+            if (n2 >= 0) addEdge(seen, edges, i, n2);
+        }
+        return edges;
+    }
+
+    private static void addEdge(Set<String> seen, List<int[]> edges, int a, int b) {
+        int lo = Math.min(a, b), hi = Math.max(a, b);
+        String key = lo + ":" + hi;
+        if (seen.add(key)) edges.add(new int[]{lo, hi});
     }
 
     /** White particle column. */
