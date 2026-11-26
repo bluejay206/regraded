@@ -1,5 +1,6 @@
 package me.bluejay.regraded;
 
+import me.bluejay.regraded.command.RgCommands;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +11,7 @@ public class ReGraded implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        RgCommands.register();
         LOGGER.info("ReGraded (26.2) loaded.");
     }
 }
