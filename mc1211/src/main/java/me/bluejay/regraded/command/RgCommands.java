@@ -1,7 +1,6 @@
 package me.bluejay.regraded.command;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
-import me.bluejay.regraded.client.JobStore;
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.regrade.Regrade;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -20,6 +19,7 @@ import java.nio.file.Path;
 
 /**
  * /rg command tree (Yarn / 1.21.1).
+ * Persistence is handled on the client (JobStore) on join/leave.
  */
 public final class RgCommands {
     private static final double RAY_RANGE = 100.0;
@@ -44,7 +44,6 @@ public final class RgCommands {
                         .then(CommandManager.literal("clear")
                                 .executes(ctx -> {
                                     Points.clear();
-                                    JobStore.save();
                                     ctx.getSource().sendFeedback(() -> Text.literal("Point list cleared."), false);
                                     return 1;
                                 }))
@@ -65,7 +64,6 @@ public final class RgCommands {
             }
             String csv = Files.readString(path);
             int added = Points.list().importCsv(csv);
-            JobStore.save();
             source.sendFeedback(() -> Text.literal("Imported " + added + " points (total " + Points.size() + ") from " + path.getFileName()), false);
             return 1;
         } catch (Exception e) {
