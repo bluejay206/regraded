@@ -1,6 +1,5 @@
 package me.bluejay.regraded;
 
-import me.bluejay.surveyio.PointStore;
 import net.minecraft.util.math.ChunkPos;
 
 /**
@@ -34,5 +33,9 @@ public final class ChunkSurfaceLayer {
 
     public ChunkPos pos() {
         return pos;
+    }
+
+    public SurfaceModel model() {
+        return model;
     }
 }

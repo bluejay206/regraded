@@ -1,17 +1,20 @@
 # ReGraded
 
-Companion mod to LevelHeaded. Reads survey CSV (PNEZD) and regrades terrain surfaces as a 16³ bit-resolution modified layer on affected chunks (via BitsAndChisels).
+Independent Fabric mod for chunk-level terrain regrading from survey CSV data.
 
-## Architecture
-
-- `survey-io` (from levelheaded-fabric) — pure-Java point store + PNEZD CSV.
-- `core` — SurfaceModel (TIN or averaged height grid).
-- Fabric layer — ChunkSurfaceLayer + BitApplicator that writes into BitsAndChisels blocks.
+- Own point list (`SurveyPoint` / `PointList`) under `me.bluejay.regraded.core`
+- PNEZD CSV import (compatible with LevelHeaded exports)
+- Pure surface model (nearest-neighbor stub; TIN/averaged planned)
+- White particle visualization toggled by **Ctrl-Z**
+- Chunk-scoped 16³ bit-resolution modified layer (BitsAndChisels / C&B planned)
+- No hard dependency on LevelHeaded
 
 ## Status
 
-Scaffold only. No full TIN yet. Designed to stay independent of LevelHeaded (soft/optional dependency for live PointStore).
+Scaffold + CSV import + white particle markers. Bit-surface applicator still TODO.
 
 ## Build
 
-Requires BitsAndChisels. See build.gradle for the target version.
+```bash
+./gradlew :fabric:build
+```
