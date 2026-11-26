@@ -2,25 +2,17 @@ package me.bluejay.regraded.client;
 
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.core.SurveyPoint;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Draws a small box at each loaded survey point. Toggle with Ctrl-Z.
- * Particles remain as a fallback for platforms without the render event.
+ * White particle column at each loaded survey point. Toggle with Ctrl-Z.
  * Coordinate convention matches LevelHeaded: easting = X, northing = -Z.
  */
 public final class PointMarkers {
     private static boolean visible;
-    private static boolean renderRegistered;
 
     private PointMarkers() {}
 
@@ -37,31 +29,10 @@ public final class PointMarkers {
     }
 
     public static void registerRender() {
-        if (renderRegistered) return;
-        renderRegistered = true;
-        WorldRenderEvents.AFTER_ENTITIES.register(context -> {
-            if (!visible) return;
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || context.matrixStack() == null || context.consumers() == null) return;
-            Vec3d cam = context.camera().getPos();
-            MatrixStack matrices = context.matrixStack();
-            VertexConsumerProvider consumers = context.consumers();
-            VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
-            for (SurveyPoint p : Points.list().points()) {
-                double x = p.easting();
-                double y = p.elevation();
-                double z = -p.northing();
-                if (cam.squaredDistanceTo(x, y, z) > 256 * 256) continue;
-                WorldRenderer.drawBox(
-                        matrices, lines,
-                        x - cam.x - 0.05, y - cam.y, z - cam.z - 0.05,
-                        x - cam.x + 0.05, y - cam.y + 1.0, z - cam.z + 0.05,
-                        1.0f, 1.0f, 1.0f, 1.0f);
-            }
-        });
+        // WorldRenderEvents box removed. Particles only.
     }
 
-    /** Particle fallback. Used when the render event is unavailable. */
+    /** White particle column. */
     public static void tick(MinecraftClient client) {
         if (!visible || client.world == null || client.player == null) return;
         Vec3d eye = client.player.getEyePos();
