@@ -12,8 +12,7 @@ import java.lang.reflect.Method;
 
 /**
  * Soft-dependency applicator for Chisels & Bits.
- * Tries the C&B API via reflection; falls back to setting the vanilla block
- * so regrade has a visible effect even if the API call is not yet confirmed.
+ * Only writes when the C&B bit API succeeds. No full-block fallback.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
@@ -29,14 +28,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     public boolean setBit(World world, BlockPos blockPos, int x, int y, int z, BlockState material) {
         if (world == null || blockPos == null || material == null) return false;
         if (world.isClient) return false;
-
-        if (tryChiselsAndBits(world, blockPos, x, y, z, material)) {
-            return true;
-        }
-
-        // Fallback: set the block itself so the regrade is visible.
-        world.setBlockState(blockPos, material);
-        return true;
+        return tryChiselsAndBits(world, blockPos, x, y, z, material);
     }
 
     private boolean tryChiselsAndBits(World world, BlockPos pos, int x, int y, int z, BlockState material) {
