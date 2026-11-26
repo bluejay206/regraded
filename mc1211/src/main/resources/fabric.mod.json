@@ -17,6 +17,6 @@
     "fabric-api": "*"
   },
   "suggests": {
-    "bitsandchisels": "*"
+    "chiselsandbits": "*"
   }
 }

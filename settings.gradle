@@ -17,5 +17,6 @@ rootProject.name = 'regraded'
 
 include 'core'
 include 'mc1211'
-include 'mc262'
-include 'mc263'
+// Paused until Chisels & Bits is available for these versions:
+// include 'mc262'
+// include 'mc263'
