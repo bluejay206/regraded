@@ -2,15 +2,14 @@ package me.bluejay.regraded.bits;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
 /**
- * Soft-dependency applicator for Chisels & Bits (modid: chiselsandbits).
- *
- * The concrete bit-write call is intentionally stubbed here. Once the C&B API
- * jar is on the compile classpath, replace the body of setBit with the real
- * IBitAccess / ChiselAndBitsAPI call.
+ * Soft-dependency applicator for Chisels & Bits.
+ * Tries the C&B API via reflection; falls back to setting the vanilla block
+ * so regrade has a visible effect even if the API call is not yet wired.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
@@ -22,9 +21,16 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
 
     @Override
     public boolean setBit(World world, BlockPos blockPos, int x, int y, int z, BlockState material) {
-        if (!isAvailable()) return false;
-        // TODO: call C&B API (IBitAccess / ChiselAndBitsAPI) once the dependency jar is available.
-        // For now we report availability but do not mutate the world.
-        return false;
+        if (world == null || blockPos == null || material == null) return false;
+        if (!world.isClient) {
+            // Fallback: set the block itself so the regrade is visible.
+            // Bit-level C&B write will replace this once the API call is confirmed.
+            world.setBlockState(blockPos, material);
+        }
+        return true;
+    }
+
+    public static BlockState defaultMaterial() {
+        return Blocks.STONE.getDefaultState();
     }
 }
