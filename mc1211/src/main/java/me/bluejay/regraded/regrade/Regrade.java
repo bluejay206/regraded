@@ -15,17 +15,12 @@ import java.util.List;
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
  * Only the surface block and the adjacent blocks above and below are written.
- * Coordinate convention: SurveyPoint.easting = world X, northing = world Z.
  */
 public final class Regrade {
     private static final int BITS = 16;
 
     private Regrade() {}
 
-    /**
-     * Regrade the surface at the given column. Writes bits in the block at the
-     * TIN elevation and the blocks immediately above and below it.
-     */
     public static int column(ServerWorld world, int x, int z) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
@@ -37,7 +32,6 @@ public final class Regrade {
         BitApplicator app = BitApplicator.current();
         int written = 0;
 
-        // Surface block and the one above and below.
         for (int dy = -1; dy <= 1; dy++) {
             BlockPos origin = new BlockPos(x, surfaceY + dy, z);
             double blockBase = origin.getY();
@@ -69,5 +63,9 @@ public final class Regrade {
             }
         }
         return written;
+    }
+
+    public static String failure() {
+        return ChiselsAndBitsApplicator.lastFailure();
     }
 }

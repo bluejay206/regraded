@@ -19,7 +19,6 @@ import java.nio.file.Path;
 
 /**
  * /rg command tree (Yarn / 1.21.1).
- * Persistence is handled on the client (JobStore) on join/leave.
  */
 public final class RgCommands {
     private static final double RAY_RANGE = 100.0;
@@ -72,6 +71,12 @@ public final class RgCommands {
         }
     }
 
+    private static String status(int written) {
+        if (written > 0) return "";
+        String fail = Regrade.failure();
+        return fail.isEmpty() ? " (C&B write failed)" : " (" + fail + ")";
+    }
+
     private static int regradeBlock(ServerCommandSource source) {
         if (Points.size() == 0) {
             source.sendError(Text.literal("No points loaded. Use /rg import <csv> first."));
@@ -80,7 +85,8 @@ public final class RgCommands {
         ServerWorld world = source.getWorld();
         BlockPos pos = BlockPos.ofFloored(source.getPosition());
         int written = Regrade.block(world, pos);
-        source.sendFeedback(() -> Text.literal("Regraded block at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
+        String s = status(written);
+        source.sendFeedback(() -> Text.literal("Regraded block at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 
@@ -102,7 +108,8 @@ public final class RgCommands {
         ServerWorld world = source.getWorld();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         int written = Regrade.block(world, pos);
-        source.sendFeedback(() -> Text.literal("Regraded block under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits, TIN)."), false);
+        String s = status(written);
+        source.sendFeedback(() -> Text.literal("Regraded block under raycast at " + pos.getX() + "," + pos.getY() + "," + pos.getZ() + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 
@@ -113,9 +120,9 @@ public final class RgCommands {
         }
         ServerWorld world = source.getWorld();
         ChunkPos chunk = new ChunkPos(BlockPos.ofFloored(source.getPosition()));
-        int surfaceY = (int) Math.floor(source.getPosition().y);
-        int written = Regrade.chunk(world, chunk, surfaceY);
-        source.sendFeedback(() -> Text.literal("Regraded chunk " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
+        int written = Regrade.chunk(world, chunk, 0);
+        String s = status(written);
+        source.sendFeedback(() -> Text.literal("Regraded chunk " + chunk.x + "," + chunk.z + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 
@@ -138,7 +145,8 @@ public final class RgCommands {
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         ChunkPos chunk = new ChunkPos(pos);
         int written = Regrade.chunk(world, chunk, pos.getY());
-        source.sendFeedback(() -> Text.literal("Regraded chunk under raycast " + chunk.x + "," + chunk.z + " (" + written + " bits, TIN)."), false);
+        String s = status(written);
+        source.sendFeedback(() -> Text.literal("Regraded chunk under raycast " + chunk.x + "," + chunk.z + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 }

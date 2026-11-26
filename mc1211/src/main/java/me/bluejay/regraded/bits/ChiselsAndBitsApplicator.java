@@ -5,19 +5,16 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 
 /**
  * Soft-dependency applicator for Chisels & Bits.
- * Only writes when the C&B bit API succeeds. No full-block fallback.
+ * On failure the last reason is available via lastFailure().
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     public static final String MOD_ID = "chiselsandbits";
-    private static final Logger LOG = LoggerFactory.getLogger("ReGraded");
-    private static boolean loggedFailure;
+    private static String lastFailure = "";
 
     @Override
     public boolean isAvailable() {
@@ -31,20 +28,22 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
         return tryChiselsAndBits(world, blockPos, x, y, z, material);
     }
 
+    public static String lastFailure() { return lastFailure; }
+
     private boolean tryChiselsAndBits(World world, BlockPos pos, int x, int y, int z, BlockState material) {
         try {
             Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
             Method getInstance = apiClass.getMethod("getInstance");
             Object api = getInstance.invoke(null);
             if (api == null) {
-                logOnce("C&B API getInstance returned null");
+                lastFailure = "API getInstance returned null";
                 return false;
             }
 
             Method getBitAccess = api.getClass().getMethod("getBitAccess", World.class, BlockPos.class);
             Object access = getBitAccess.invoke(api, world, pos);
             if (access == null) {
-                logOnce("C&B getBitAccess returned null");
+                lastFailure = "getBitAccess returned null";
                 return false;
             }
 
@@ -57,17 +56,11 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
 
             Method commit = access.getClass().getMethod("commitChanges", boolean.class);
             commit.invoke(access, true);
+            lastFailure = "";
             return true;
         } catch (Throwable t) {
-            logOnce("C&B reflection failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            lastFailure = t.getClass().getSimpleName() + ": " + t.getMessage();
             return false;
-        }
-    }
-
-    private static void logOnce(String msg) {
-        if (!loggedFailure) {
-            loggedFailure = true;
-            LOG.warn(msg);
         }
     }
 
