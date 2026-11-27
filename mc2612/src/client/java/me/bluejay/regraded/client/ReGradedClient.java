@@ -24,7 +24,12 @@ public class ReGradedClient implements ClientModInitializer {
             if (down && !ctrlZWasDown) {
                 markersVisible = !markersVisible;
                 LOGGER.info("ReGraded markers {}", markersVisible ? "ON" : "OFF");
-                // TODO: PointMarkers.toggle() once ported
+                if (client.player != null && client.gui != null) {
+                    client.gui.setOverlayMessage(
+                            net.minecraft.network.chat.Component.literal(
+                                    markersVisible ? "RG markers on" : "RG markers off"),
+                            false);
+                }
             }
             ctrlZWasDown = down;
         });
