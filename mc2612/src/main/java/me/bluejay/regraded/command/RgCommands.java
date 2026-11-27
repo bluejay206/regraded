@@ -145,10 +145,11 @@ public final class RgCommands {
     }
 
     private static String status(int written) {
+        String range = Regrade.elevationRange();
         if (written == 0) {
             String f = Regrade.failure();
-            return f.isEmpty() ? "" : " [" + f + "]";
+            return (f.isEmpty() ? "" : " [" + f + "]") + range;
         }
-        return "";
+        return range;
     }
 }
