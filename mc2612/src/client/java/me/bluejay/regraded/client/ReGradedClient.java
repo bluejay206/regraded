@@ -16,7 +16,7 @@ public class ReGradedClient implements ClientModInitializer {
         LOGGER.info("ReGraded client initialized (26.1.2)");
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.getWindow() == null) return;
-            long handle = client.getWindow().getWindow();
+            long handle = client.getWindow().handle();
             boolean ctrl = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
                     || GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
             boolean z = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
