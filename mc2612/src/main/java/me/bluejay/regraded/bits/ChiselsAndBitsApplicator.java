@@ -15,6 +15,10 @@ import java.util.Optional;
  * Soft-dependency applicator for Chisels & Bits (Mojang mappings / 26.1.2).
  * Implements BitApplicator so it can be installed at launch.
  * Uses reflection against the mutator API so the project builds without a hard C&B dependency.
+ *
+ * Reflection is resolved lazily on first use. The original static initializer ran too early
+ * (before C&B finished installing its API), so getMutatorFactory() returned null and
+ * factory.getClass() threw.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static final String MOD_ID = "chiselsandbits";
@@ -26,33 +30,54 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static Method in;
     private static Method overrideInAreaTarget;
     private static Class<?> blockInformationClass;
-    private static Object airInfo;
+    private static volatile boolean resolved = false;
+    private static volatile boolean available = false;
     private static String lastFailure = null;
 
-    static {
-        if (LOADED) {
-            try {
-                Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
-                getInstance = apiClass.getMethod("getInstance");
-                Object api = getInstance.invoke(null);
-                getMutatorFactory = apiClass.getMethod("getMutatorFactory");
-                Object factory = getMutatorFactory.invoke(api);
-                Class<?> factoryClass = factory.getClass();
-                in = factoryClass.getMethod("in", LevelAccessor.class, BlockPos.class);
-
-                Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator");
-                blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
-                overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
-                airInfo = blockInformationClass.getField("AIR").get(null);
-            } catch (Exception e) {
-                lastFailure = "C&B API reflection failed: " + e.getMessage();
-                System.err.println("[ReGraded] " + lastFailure);
+    private static synchronized boolean ensureResolved() {
+        if (resolved && available) return true;
+        // Allow retry if a previous attempt failed (API may not have been ready yet).
+        if (!LOADED) {
+            resolved = true;
+            available = false;
+            lastFailure = "C&B mod not loaded";
+            return false;
+        }
+        try {
+            Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
+            getInstance = apiClass.getMethod("getInstance");
+            Object api = getInstance.invoke(null);
+            if (api == null) {
+                lastFailure = "IChiselsAndBitsAPI.getInstance() returned null (API not yet installed)";
+                return false;
             }
+            getMutatorFactory = apiClass.getMethod("getMutatorFactory");
+            Object factory = getMutatorFactory.invoke(api);
+            if (factory == null) {
+                lastFailure = "getMutatorFactory() returned null";
+                return false;
+            }
+            Class<?> factoryClass = factory.getClass();
+            in = factoryClass.getMethod("in", LevelAccessor.class, BlockPos.class);
+
+            Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator");
+            blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
+            // overrideInAreaTarget is a default method on IAreaMutator (superinterface)
+            overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
+            resolved = true;
+            available = true;
+            lastFailure = null;
+            return true;
+        } catch (Exception e) {
+            lastFailure = "C&B API reflection failed: " + e.getClass().getSimpleName() + ": " + e.getMessage();
+            System.err.println("[ReGraded] " + lastFailure);
+            e.printStackTrace(System.err);
+            return false;
         }
     }
 
     public static boolean isAvailableStatic() {
-        return LOADED && overrideInAreaTarget != null;
+        return ensureResolved();
     }
 
     @Override
@@ -70,8 +95,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
 
     @Override
     public boolean setBit(Level world, BlockPos blockPos, int x, int y, int z, BlockState material) {
-        if (!isAvailableStatic()) {
-            lastFailure = "C&B not available";
+        if (!ensureResolved()) {
             return false;
         }
         double lx = (x + 0.5) / BITS;
@@ -81,7 +105,15 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
         try {
             Object api = getInstance.invoke(null);
             Object factory = getMutatorFactory.invoke(api);
+            if (factory == null) {
+                lastFailure = "getMutatorFactory() returned null at setBit time";
+                return false;
+            }
             Object mutator = in.invoke(factory, world, blockPos);
+            if (mutator == null) {
+                lastFailure = "IMutatorFactory.in() returned null";
+                return false;
+            }
             Object info = blockInformationClass.getConstructor(BlockState.class, Optional.class)
                     .newInstance(material, Optional.empty());
             overrideInAreaTarget.invoke(mutator, info, local);
