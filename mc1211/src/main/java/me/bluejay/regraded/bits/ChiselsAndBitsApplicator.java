@@ -1,69 +1,68 @@
 package me.bluejay.regraded.bits;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.WorldAccess;
+import net.minecraft.block.BlockState;
+import net.minecraft.util.math.Vec3d;
 
 import java.lang.reflect.Method;
+import java.util.Optional;
 
 /**
- * Soft-dependency applicator for Chisels & Bits.
- * On failure the last reason is available via lastFailure().
+ * Soft-dependency applicator for Chisels & Bits (Yarn mappings for 1.21.1).
+ * Uses reflection against the C&B API so the project builds without a hard dependency.
  */
-public final class ChiselsAndBitsApplicator implements BitApplicator {
-    public static final String MOD_ID = "chiselsandbits";
-    private static String lastFailure = "";
-    private static String methodList = "";
+public final class ChiselsAndBitsApplicator {
+    private static final String MOD_ID = "chiselsandbits";
+    private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID);
 
-    @Override
-    public boolean isAvailable() {
-        return FabricLoader.getInstance().isModLoaded(MOD_ID);
-    }
+    private static Method getInstance;
+    private static Method getMutatorFactory;
+    private static Method in;
+    private static Method overrideInAreaTarget;
+    private static Class<?> blockInformationClass;
+    private static Object airInfo;
 
-    @Override
-    public boolean setBit(World world, BlockPos blockPos, int x, int y, int z, BlockState material) {
-        if (world == null || blockPos == null || material == null) return false;
-        if (world.isClient) return false;
-        return tryChiselsAndBits(world, blockPos, x, y, z, material);
-    }
+    static {
+        if (LOADED) {
+            try {
+                Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
+                getInstance = apiClass.getMethod("getInstance");
+                Object api = getInstance.invoke(null);
+                getMutatorFactory = apiClass.getMethod("getMutatorFactory");
+                Object factory = getMutatorFactory.invoke(api);
+                Class<?> factoryClass = factory.getClass();
+                in = factoryClass.getMethod("in", WorldAccess.class, BlockPos.class);
 
-    public static String lastFailure() { return lastFailure; }
-
-    private boolean tryChiselsAndBits(World world, BlockPos pos, int x, int y, int z, BlockState material) {
-        try {
-            Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
-            Method getInstance = apiClass.getMethod("getInstance");
-            Object api = getInstance.invoke(null);
-            if (api == null) {
-                lastFailure = "API getInstance returned null";
-                return false;
+                Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator");
+                blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
+                overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3d.class);
+                airInfo = blockInformationClass.getField("AIR").get(null);
+            } catch (Exception e) {
+                System.err.println("[ReGraded] C&B API reflection failed: " + e.getMessage());
             }
-
-            if (methodList.isEmpty()) {
-                StringBuilder sb = new StringBuilder();
-                for (Method m : api.getClass().getMethods()) {
-                    if (m.getDeclaringClass() == Object.class) continue;
-                    sb.append(m.getName()).append('(');
-                    Class<?>[] params = m.getParameterTypes();
-                    for (int i = 0; i < params.length; i++) {
-                        if (i > 0) sb.append(',');
-                        sb.append(params[i].getSimpleName());
-                    }
-                    sb.append(") ");
-                }
-                methodList = sb.toString();
-            }
-            lastFailure = methodList;
-            return false;
-        } catch (Throwable t) {
-            lastFailure = t.getClass().getSimpleName() + ": " + t.getMessage();
-            return false;
         }
     }
 
-    public static BlockState defaultMaterial() {
-        return Blocks.STONE.getDefaultState();
+    public static boolean isAvailable() {
+        return LOADED && overrideInAreaTarget != null;
+    }
+
+    public static void writeBit(WorldAccess world, BlockPos pos, Vec3d local, BlockState state) {
+        if (!isAvailable()) {
+            world.setBlockState(pos, state, 3);
+            return;
+        }
+        try {
+            Object api = getInstance.invoke(null);
+            Object factory = getMutatorFactory.invoke(api);
+            Object mutator = in.invoke(factory, world, pos);
+            Object info = blockInformationClass.getConstructor(BlockState.class, Optional.class)
+                    .newInstance(state, Optional.empty());
+            overrideInAreaTarget.invoke(mutator, info, local);
+        } catch (Exception e) {
+            world.setBlockState(pos, state, 3);
+        }
     }
 }

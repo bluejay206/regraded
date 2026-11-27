@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "regraded",
+  "version": "${version}",
+  "name": "ReGraded",
+  "description": "Chunk-level terrain regrading from survey data using TIN surfaces at bit resolution.",
+  "authors": ["Bluejay"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/regraded/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "me.bluejay.regraded.ReGradedMod"
+    ],
+    "client": [
+      "me.bluejay.regraded.client.ReGradedClient"
+    ]
+  },
+  "mixins": [
+    "regraded.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "chiselsandbits": "*"
+  }
+}
