@@ -1,6 +1,7 @@
 package me.bluejay.regraded.command;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import me.bluejay.regraded.JobStore;
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.regrade.Regrade;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -43,6 +44,8 @@ public final class RgCommands {
                         .then(Commands.literal("clear")
                                 .executes(ctx -> {
                                     Points.clear();
+                                    ensureWorld(ctx.getSource());
+                                    JobStore.save();
                                     ctx.getSource().sendSuccess(() -> Component.literal("Point list cleared."), false);
                                     return 1;
                                 }))
@@ -62,6 +65,8 @@ public final class RgCommands {
         try {
             String csv = Files.readString(path);
             int added = Points.list().importCsv(csv);
+            ensureWorld(source);
+            JobStore.save();
             source.sendSuccess(() -> Component.literal("Imported " + added + " points (total " + Points.size() + ") from " + path.getFileName()), false);
             return added;
         } catch (Exception e) {
@@ -142,6 +147,17 @@ public final class RgCommands {
         String s = status(written);
         source.sendSuccess(() -> Component.literal("Regraded chunk under raycast " + chunk.x() + "," + chunk.z() + " (" + written + " bits)" + s + "."), false);
         return 1;
+    }
+
+    private static void ensureWorld(CommandSourceStack source) {
+        if ("none".equals(JobStore.worldId())) {
+            try {
+                String name = source.getServer().getWorldData().getLevelName();
+                JobStore.setWorld(name);
+            } catch (Exception ignored) {
+                // keep none; save will no-op
+            }
+        }
     }
 
     private static String status(int written) {
