@@ -15,10 +15,9 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 
     implementation project(':core')
-    include project(':core')
-
-    // Soft dependency on Chisels & Bits — compileOnly when the API jar is available
-    // modCompileOnly "curse.maven:chisels-bits-for-fabric-561059:9388147" // example
+    // Merge core classes directly so Points is always on the classpath
+    // (nested jar-in-jar was not visible at runtime alongside LevelHeaded's core)
+    // include project(':core')
 }
 
 loom {
@@ -53,4 +52,6 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.name}" }
     }
+    // Merge core classes into this jar so Points is always on the classpath
+    from(project(':core').sourceSets.main.output)
 }
