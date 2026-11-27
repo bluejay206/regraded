@@ -4,6 +4,7 @@ import me.bluejay.regraded.bits.BitApplicator;
 import me.bluejay.regraded.bits.ChiselsAndBitsApplicator;
 import me.bluejay.regraded.command.RgCommands;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,10 +14,12 @@ public class ReGradedMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        ChiselsAndBitsApplicator cab = new ChiselsAndBitsApplicator();
-        if (cab.isAvailable()) {
-            BitApplicator.set(cab);
-            LOGGER.info("Chisels & Bits detected. Bit applicator enabled.");
+        // Install the applicator if C&B is present, but do not touch its API here.
+        // Resolving (or getEntrypointContainers) during onInitialize re-enters Scena/C&B
+        // construction and triggers "Can not setup API twice!".
+        if (FabricLoader.getInstance().isModLoaded("chiselsandbits")) {
+            BitApplicator.set(new ChiselsAndBitsApplicator());
+            LOGGER.info("Chisels & Bits detected. Bit applicator installed (API resolved on first use).");
         } else {
             BitApplicator.set(BitApplicator.NONE);
             LOGGER.info("Chisels & Bits not present. Regrade will queue only.");
