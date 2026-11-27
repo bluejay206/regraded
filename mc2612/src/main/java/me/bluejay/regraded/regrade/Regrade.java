@@ -16,6 +16,9 @@ import java.util.List;
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
  * Only the surface block and the adjacent blocks above and below are written.
  * Mojang mappings / 26.1.2.
+ *
+ * Coordinate convention matches LevelHeaded and the white markers:
+ * world X = easting, world Z = -northing.
  */
 public final class Regrade {
     private static final int BITS = 16;
@@ -25,7 +28,8 @@ public final class Regrade {
     public static int column(ServerLevel world, int x, int z) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
-        double elev = TinSurface.elevationAt(pts, x + 0.5, z + 0.5);
+        // world Z is -northing
+        double elev = TinSurface.elevationAt(pts, x + 0.5, -(z + 0.5));
         if (Double.isNaN(elev)) return 0;
 
         int surfaceY = (int) Math.floor(elev);
@@ -38,9 +42,9 @@ public final class Regrade {
             double blockBase = origin.getY();
             for (int bx = 0; bx < BITS; bx++) {
                 for (int bz = 0; bz < BITS; bz++) {
-                    double wx = x + (bx + 0.5) / BITS;
-                    double wz = z + (bz + 0.5) / BITS;
-                    double localElev = TinSurface.elevationAt(pts, wx, wz);
+                    double easting = x + (bx + 0.5) / BITS;
+                    double northing = -(z + (bz + 0.5) / BITS);
+                    double localElev = TinSurface.elevationAt(pts, easting, northing);
                     if (Double.isNaN(localElev)) continue;
                     double bitY = (localElev - blockBase) * BITS;
                     int by = (int) Math.floor(bitY);
