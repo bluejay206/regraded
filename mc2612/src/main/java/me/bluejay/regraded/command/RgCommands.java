@@ -112,10 +112,11 @@ public final class RgCommands {
             return 0;
         }
         ServerLevel world = source.getLevel();
-        ChunkPos chunk = new ChunkPos(BlockPos.containing(source.getPosition()));
+        BlockPos playerPos = BlockPos.containing(source.getPosition());
+        ChunkPos chunk = new ChunkPos(playerPos.getX() >> 4, playerPos.getZ() >> 4);
         int written = Regrade.chunk(world, chunk, 0);
         String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded chunk " + chunk.x + "," + chunk.z + " (" + written + " bits)" + s + "."), false);
+        source.sendSuccess(() -> Component.literal("Regraded chunk " + chunk.x() + "," + chunk.z() + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 
@@ -136,10 +137,10 @@ public final class RgCommands {
         }
         ServerLevel world = source.getLevel();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
-        ChunkPos chunk = new ChunkPos(pos);
+        ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
         int written = Regrade.chunk(world, chunk, pos.getY());
         String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded chunk under raycast " + chunk.x + "," + chunk.z + " (" + written + " bits)" + s + "."), false);
+        source.sendSuccess(() -> Component.literal("Regraded chunk under raycast " + chunk.x() + "," + chunk.z() + " (" + written + " bits)" + s + "."), false);
         return 1;
     }
 

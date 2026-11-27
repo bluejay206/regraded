@@ -60,7 +60,7 @@ public final class Regrade {
         int written = 0;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                written += column(world, chunk.getMinBlockX() + x, chunk.getMinBlockZ() + z);
+                written += column(world, (chunk.x() << 4) + x, (chunk.z() << 4) + z);
             }
         }
         return written;
