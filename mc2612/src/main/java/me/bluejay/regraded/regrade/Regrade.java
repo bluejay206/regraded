@@ -8,13 +8,16 @@ import me.bluejay.regraded.core.TinSurface;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
- * Writes one bit layer at the interpolated elevation so elevation changes show.
+ * Fill: dirt bits at and below the interpolated elevation.
+ * Cut: clear bits above the surface in the surface block, and set blocks
+ * above the surface to air.
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -22,6 +25,7 @@ import java.util.List;
  */
 public final class Regrade {
     private static final int BITS = 16;
+    private static final int CUT_ABOVE = 4;
     private static double lastMin = Double.NaN;
     private static double lastMax = Double.NaN;
 
@@ -36,25 +40,45 @@ public final class Regrade {
         if (Double.isNaN(lastMax) || elev > lastMax) lastMax = elev;
 
         int surfaceY = (int) Math.floor(elev);
+        int surfaceBit = (int) Math.floor((elev - surfaceY) * BITS);
+        if (surfaceBit < 0) surfaceBit = 0;
+        if (surfaceBit >= BITS) surfaceBit = BITS - 1;
+
         BlockState mat = ChiselsAndBitsApplicator.defaultMaterial();
         BitApplicator app = BitApplicator.current();
         int written = 0;
 
-        for (int dy = -1; dy <= 1; dy++) {
-            BlockPos origin = new BlockPos(x, surfaceY + dy, z);
-            double blockBase = origin.getY();
-            for (int bx = 0; bx < BITS; bx++) {
-                for (int bz = 0; bz < BITS; bz++) {
-                    double easting = x + (bx + 0.5) / BITS;
-                    double northing = -(z + (bz + 0.5) / BITS);
-                    double localElev = TinSurface.elevationAt(pts, easting, northing);
-                    if (Double.isNaN(localElev)) continue;
-                    double bitY = (localElev - blockBase) * BITS;
-                    int by = (int) Math.floor(bitY);
-                    if (by < 0 || by >= BITS) continue;
-                    if (app.setBit(world, origin, bx, by, bz, mat)) written++;
+        // Fill: dirt bits in the surface block, up to the surface bit.
+        BlockPos surface = new BlockPos(x, surfaceY, z);
+        for (int bx = 0; bx < BITS; bx++) {
+            for (int bz = 0; bz < BITS; bz++) {
+                double easting = x + (bx + 0.5) / BITS;
+                double northing = -(z + (bz + 0.5) / BITS);
+                double localElev = TinSurface.elevationAt(pts, easting, northing);
+                if (Double.isNaN(localElev)) continue;
+                int localY = (int) Math.floor(localElev);
+                int localBit = (int) Math.floor((localElev - localY) * BITS);
+                if (localBit < 0) localBit = 0;
+                if (localBit >= BITS) localBit = BITS - 1;
+                if (localY != surfaceY) continue;
+                for (int by = 0; by <= localBit; by++) {
+                    if (app.setBit(world, surface, bx, by, bz, mat)) written++;
+                }
+                // Cut: clear bits above the surface in this block.
+                for (int by = localBit + 1; by < BITS; by++) {
+                    if (app.clearBit(world, surface, bx, by, bz)) written++;
                 }
             }
+        }
+
+        // Cut: remove whole blocks above the surface.
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int dy = 1; dy <= CUT_ABOVE; dy++) {
+            BlockPos above = new BlockPos(x, surfaceY + dy, z);
+            BlockState existing = world.getBlockState(above);
+            if (existing.isAir()) continue;
+            world.setBlock(above, air, 3);
+            written++;
         }
         return written;
     }

@@ -19,7 +19,7 @@ import java.util.Optional;
  * Reflection is resolved lazily on first use. Do not resolve during onInitialize, and do not
  * load the API through a different classloader: on 26.1.2 everything is on Knot, and a second
  * Class.forName(name, true, otherLoader) or getEntrypointContainers call disturbs C&B's static
- * Holder/config (seen as "Can not setup API twice!" and a null client configuration).
+ * Holder/config.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static final String MOD_ID = "chiselsandbits";
@@ -30,6 +30,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static Method getMutatorFactory;
     private static Method in;
     private static Method overrideInAreaTarget;
+    private static Method clearInAreaTarget;
     private static Class<?> blockInformationClass;
     private static volatile boolean resolved = false;
     private static volatile boolean available = false;
@@ -63,6 +64,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator");
             blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
             overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
+            clearInAreaTarget = mutatorClass.getMethod("clearInAreaTarget", Vec3.class);
             resolved = true;
             available = true;
             lastFailure = null;
@@ -91,23 +93,19 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
         return lastFailure == null ? "" : lastFailure;
     }
 
+    private static Object mutatorFor(Level world, BlockPos blockPos) throws Exception {
+        Object api = getInstance.invoke(null);
+        Object factory = getMutatorFactory.invoke(api);
+        if (factory == null) return null;
+        return in.invoke(factory, world, blockPos);
+    }
+
     @Override
     public boolean setBit(Level world, BlockPos blockPos, int x, int y, int z, BlockState material) {
-        if (!ensureResolved()) {
-            return false;
-        }
-        double lx = (x + 0.5) / BITS;
-        double ly = (y + 0.5) / BITS;
-        double lz = (z + 0.5) / BITS;
-        Vec3 local = new Vec3(lx, ly, lz);
+        if (!ensureResolved()) return false;
+        Vec3 local = new Vec3((x + 0.5) / BITS, (y + 0.5) / BITS, (z + 0.5) / BITS);
         try {
-            Object api = getInstance.invoke(null);
-            Object factory = getMutatorFactory.invoke(api);
-            if (factory == null) {
-                lastFailure = "getMutatorFactory() returned null at setBit time";
-                return false;
-            }
-            Object mutator = in.invoke(factory, world, blockPos);
+            Object mutator = mutatorFor(world, blockPos);
             if (mutator == null) {
                 lastFailure = "IMutatorFactory.in() returned null";
                 return false;
@@ -115,6 +113,25 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             Object info = blockInformationClass.getConstructor(BlockState.class, Optional.class)
                     .newInstance(material, Optional.empty());
             overrideInAreaTarget.invoke(mutator, info, local);
+            lastFailure = null;
+            return true;
+        } catch (Exception e) {
+            lastFailure = e.getClass().getSimpleName() + ": " + e.getMessage();
+            return false;
+        }
+    }
+
+    @Override
+    public boolean clearBit(Level world, BlockPos blockPos, int x, int y, int z) {
+        if (!ensureResolved()) return false;
+        Vec3 local = new Vec3((x + 0.5) / BITS, (y + 0.5) / BITS, (z + 0.5) / BITS);
+        try {
+            Object mutator = mutatorFor(world, blockPos);
+            if (mutator == null) {
+                lastFailure = "IMutatorFactory.in() returned null";
+                return false;
+            }
+            clearInAreaTarget.invoke(mutator, local);
             lastFailure = null;
             return true;
         } catch (Exception e) {

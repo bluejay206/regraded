@@ -17,6 +17,14 @@ public interface BitApplicator {
      */
     boolean setBit(Level world, BlockPos blockPos, int x, int y, int z, BlockState material);
 
+    /**
+     * Clear a single bit inside a block (cut).
+     * x/y/z are local bit coordinates (0..15).
+     */
+    default boolean clearBit(Level world, BlockPos blockPos, int x, int y, int z) {
+        return false;
+    }
+
     static BitApplicator current() {
         return Holder.INSTANCE;
     }
