@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 
 public class ReGradedClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("regraded");
-    private static boolean markersVisible = false;
     private static boolean ctrlZWasDown = false;
 
     @Override
@@ -22,16 +21,10 @@ public class ReGradedClient implements ClientModInitializer {
             boolean z = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
             boolean down = ctrl && z;
             if (down && !ctrlZWasDown) {
-                markersVisible = !markersVisible;
-                LOGGER.info("ReGraded markers {}", markersVisible ? "ON" : "OFF");
-                if (client.player != null && client.gui != null) {
-                    client.gui.setOverlayMessage(
-                            net.minecraft.network.chat.Component.literal(
-                                    markersVisible ? "RG markers on" : "RG markers off"),
-                            false);
-                }
+                PointMarkers.toggle();
             }
             ctrlZWasDown = down;
+            PointMarkers.tick(client);
         });
     }
 }
