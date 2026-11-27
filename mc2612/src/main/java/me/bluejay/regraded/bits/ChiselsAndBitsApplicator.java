@@ -1,6 +1,7 @@
 package me.bluejay.regraded.bits;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -16,9 +17,9 @@ import java.util.Optional;
  * Implements BitApplicator so it can be installed at launch.
  * Uses reflection against the mutator API so the project builds without a hard C&B dependency.
  *
- * Reflection is resolved lazily on first use. The original static initializer ran too early
- * (before C&B finished installing its API), so getMutatorFactory() returned null and
- * factory.getClass() threw.
+ * Reflection is resolved lazily on first use, and the API class is loaded from C&B's own
+ * classloader. A plain Class.forName from ReGraded's classloader sees a different Class
+ * object whose Holder is still null, even after C&B has installed the real API.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static final String MOD_ID = "chiselsandbits";
@@ -34,9 +35,25 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static volatile boolean available = false;
     private static String lastFailure = null;
 
+    /** Classloader that owns the C&B classes (so we see the installed API instance). */
+    private static ClassLoader cbClassLoader() {
+        for (EntrypointContainer<Object> ep : FabricLoader.getInstance().getEntrypointContainers("main", Object.class)) {
+            if (MOD_ID.equals(ep.getProvider().getMetadata().getId())) {
+                Object entry = ep.getEntrypoint();
+                if (entry != null) return entry.getClass().getClassLoader();
+            }
+        }
+        for (EntrypointContainer<Object> ep : FabricLoader.getInstance().getEntrypointContainers("client", Object.class)) {
+            if (MOD_ID.equals(ep.getProvider().getMetadata().getId())) {
+                Object entry = ep.getEntrypoint();
+                if (entry != null) return entry.getClass().getClassLoader();
+            }
+        }
+        return null;
+    }
+
     private static synchronized boolean ensureResolved() {
         if (resolved && available) return true;
-        // Allow retry if a previous attempt failed (API may not have been ready yet).
         if (!LOADED) {
             resolved = true;
             available = false;
@@ -44,7 +61,12 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             return false;
         }
         try {
-            Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI");
+            ClassLoader cl = cbClassLoader();
+            if (cl == null) {
+                lastFailure = "Could not find C&B classloader via entrypoints";
+                return false;
+            }
+            Class<?> apiClass = Class.forName("mod.chiselsandbits.api.IChiselsAndBitsAPI", true, cl);
             getInstance = apiClass.getMethod("getInstance");
             Object api = getInstance.invoke(null);
             if (api == null) {
@@ -60,9 +82,8 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             Class<?> factoryClass = factory.getClass();
             in = factoryClass.getMethod("in", LevelAccessor.class, BlockPos.class);
 
-            Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator");
-            blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
-            // overrideInAreaTarget is a default method on IAreaMutator (superinterface)
+            Class<?> mutatorClass = Class.forName("mod.chiselsandbits.api.multistate.mutator.world.IWorldAreaMutator", true, cl);
+            blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation", true, cl);
             overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
             resolved = true;
             available = true;
