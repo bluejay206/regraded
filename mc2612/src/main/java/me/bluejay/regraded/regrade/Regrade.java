@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
- * Only the surface block and the adjacent blocks above and below are written.
+ * Writes one bit layer at the interpolated elevation so elevation changes show.
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -22,15 +22,18 @@ import java.util.List;
  */
 public final class Regrade {
     private static final int BITS = 16;
+    private static double lastMin = Double.NaN;
+    private static double lastMax = Double.NaN;
 
     private Regrade() {}
 
     public static int column(ServerLevel world, int x, int z) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
-        // world Z is -northing
         double elev = TinSurface.elevationAt(pts, x + 0.5, -(z + 0.5));
         if (Double.isNaN(elev)) return 0;
+        if (Double.isNaN(lastMin) || elev < lastMin) lastMin = elev;
+        if (Double.isNaN(lastMax) || elev > lastMax) lastMax = elev;
 
         int surfaceY = (int) Math.floor(elev);
         BlockState mat = ChiselsAndBitsApplicator.defaultMaterial();
@@ -57,10 +60,14 @@ public final class Regrade {
     }
 
     public static int block(ServerLevel world, BlockPos origin) {
+        lastMin = Double.NaN;
+        lastMax = Double.NaN;
         return column(world, origin.getX(), origin.getZ());
     }
 
     public static int chunk(ServerLevel world, ChunkPos chunk, int unusedSurfaceY) {
+        lastMin = Double.NaN;
+        lastMax = Double.NaN;
         int written = 0;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
@@ -68,6 +75,11 @@ public final class Regrade {
             }
         }
         return written;
+    }
+
+    public static String elevationRange() {
+        if (Double.isNaN(lastMin)) return "";
+        return String.format(" elev %.2f..%.2f", lastMin, lastMax);
     }
 
     public static String failure() {

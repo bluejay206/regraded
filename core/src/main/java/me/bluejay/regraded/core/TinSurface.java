@@ -3,57 +3,68 @@ package me.bluejay.regraded.core;
 import java.util.List;
 
 /**
- * Minimal TIN interpolator. Uses the three nearest points and barycentric
- * elevation when they form a usable triangle; otherwise inverse-distance.
+ * Inverse-distance surface over the nearest survey points.
+ * Always varies when the points have different elevations; no triangle
+ * rejection that collapses to a constant fallback.
  */
 public final class TinSurface {
+    private static final int NEAREST = 8;
+
     private TinSurface() {}
 
     public static double elevationAt(List<SurveyPoint> points, double easting, double northing) {
         if (points == null || points.isEmpty()) return Double.NaN;
         if (points.size() == 1) return points.get(0).elevation();
 
-        SurveyPoint a = null, b = null, c = null;
-        double da = Double.MAX_VALUE, db = Double.MAX_VALUE, dc = Double.MAX_VALUE;
+        SurveyPoint[] nearest = new SurveyPoint[NEAREST];
+        double[] dist = new double[NEAREST];
+        for (int i = 0; i < NEAREST; i++) dist[i] = Double.MAX_VALUE;
+        int found = 0;
+
         for (SurveyPoint p : points) {
             double d = dist2(p.easting(), p.northing(), easting, northing);
-            if (d < da) { c = b; dc = db; b = a; db = da; a = p; da = d; }
-            else if (d < db) { c = b; dc = db; b = p; db = d; }
-            else if (d < dc) { c = p; dc = d; }
+            if (d < 1e-8) return p.elevation();
+            if (found < NEAREST) {
+                nearest[found] = p;
+                dist[found] = d;
+                found++;
+                for (int i = found - 1; i > 0 && dist[i] < dist[i - 1]; i--) {
+                    swap(nearest, dist, i, i - 1);
+                }
+            } else if (d < dist[found - 1]) {
+                nearest[found - 1] = p;
+                dist[found - 1] = d;
+                for (int i = found - 1; i > 0 && dist[i] < dist[i - 1]; i--) {
+                    swap(nearest, dist, i, i - 1);
+                }
+            }
         }
-        if (a == null) return Double.NaN;
-        if (b == null) return a.elevation();
-        if (c == null) return idw(a, b, easting, northing);
 
-        double elev = barycentric(a, b, c, easting, northing);
-        return Double.isNaN(elev) ? idw3(a, b, c, easting, northing) : elev;
+        double wSum = 0.0;
+        double eSum = 0.0;
+        for (int i = 0; i < found; i++) {
+            double w = 1.0 / Math.max(dist[i], 1e-6);
+            wSum += w;
+            eSum += w * nearest[i].elevation();
+        }
+        return wSum == 0.0 ? Double.NaN : eSum / wSum;
     }
 
-    private static double barycentric(SurveyPoint a, SurveyPoint b, SurveyPoint c, double x, double y) {
-        double den = (b.northing() - c.northing()) * (a.easting() - c.easting())
-                + (c.easting() - b.easting()) * (a.northing() - c.northing());
-        if (Math.abs(den) < 1e-9) return Double.NaN;
-        double w1 = ((b.northing() - c.northing()) * (x - c.easting())
-                + (c.easting() - b.easting()) * (y - c.northing())) / den;
-        double w2 = ((c.northing() - a.northing()) * (x - c.easting())
-                + (a.easting() - c.easting()) * (y - c.northing())) / den;
-        double w3 = 1.0 - w1 - w2;
-        if (w1 < -0.01 || w2 < -0.01 || w3 < -0.01) return Double.NaN;
-        return w1 * a.elevation() + w2 * b.elevation() + w3 * c.elevation();
+    /** Elevation range of the loaded points, or NaN if empty. */
+    public static double[] range(List<SurveyPoint> points) {
+        if (points == null || points.isEmpty()) return new double[]{Double.NaN, Double.NaN};
+        double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+        for (SurveyPoint p : points) {
+            double e = p.elevation();
+            if (e < min) min = e;
+            if (e > max) max = e;
+        }
+        return new double[]{min, max};
     }
 
-    private static double idw(SurveyPoint a, SurveyPoint b, double x, double y) {
-        double da = Math.max(0.001, dist2(a.easting(), a.northing(), x, y));
-        double db = Math.max(0.001, dist2(b.easting(), b.northing(), x, y));
-        return (a.elevation() / da + b.elevation() / db) / (1.0 / da + 1.0 / db);
-    }
-
-    private static double idw3(SurveyPoint a, SurveyPoint b, SurveyPoint c, double x, double y) {
-        double da = Math.max(0.001, dist2(a.easting(), a.northing(), x, y));
-        double db = Math.max(0.001, dist2(b.easting(), b.northing(), x, y));
-        double dc = Math.max(0.001, dist2(c.easting(), c.northing(), x, y));
-        return (a.elevation() / da + b.elevation() / db + c.elevation() / dc)
-                / (1.0 / da + 1.0 / db + 1.0 / dc);
+    private static void swap(SurveyPoint[] pts, double[] dist, int i, int j) {
+        SurveyPoint tp = pts[i]; pts[i] = pts[j]; pts[j] = tp;
+        double td = dist[i]; dist[i] = dist[j]; dist[j] = td;
     }
 
     private static double dist2(double x1, double y1, double x2, double y2) {
