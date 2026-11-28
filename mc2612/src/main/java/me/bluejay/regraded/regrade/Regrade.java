@@ -13,7 +13,9 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
@@ -24,11 +26,11 @@ import java.util.List;
  * removed first so they cannot block the chisel.
  *
  * Continuity: if the TIN crosses into the block above (air), a solid material
- * block is placed there and queued for regrade. If it crosses into the block
- * below, that block is queued. When a queued block is processed, every bit
- * column in it is shaped: full if the surface is above, partial if it
- * intersects, empty if the surface is below. This keeps the plane contiguous
- * across block boundaries without holes or peaks.
+ * block is placed there and processed immediately. If it crosses into the
+ * block below, that block is processed immediately. Every bit column is
+ * shaped: full if the surface is above, partial if it intersects, empty if
+ * the surface is below. This keeps the plane contiguous across block
+ * boundaries without holes or peaks.
  *
  * Mojang mappings / 26.1.2.
  *
@@ -48,13 +50,17 @@ public final class Regrade {
 
     private Regrade() {}
 
+    public static int column(ServerLevel world, int x, int z) {
+        return column(world, x, z, null, new HashSet<>());
+    }
+
     /**
-     * Process one column. {@code targetY} is the block Y to chisel;
-     * pass null to derive it from the center elevation.
-     * Returns the number of bits written. Adjacent blocks that the TIN
-     * crosses into are placed (if air) and queued via RegradeQueue.
+     * Process one block of a column. {@code targetY} is the block Y to chisel;
+     * pass null to derive it from the center elevation. Adjacent blocks the TIN
+     * crosses into are placed (if air) and processed inline before returning.
+     * {@code visited} prevents reprocessing the same (x,z,y) in one call chain.
      */
-    public static int column(ServerLevel world, int x, int z, Integer targetY) {
+    public static int column(ServerLevel world, int x, int z, Integer targetY, Set<String> visited) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
         double elev = TinSurface.elevationAt(pts, x + 0.5, -(z + 0.5));
@@ -63,6 +69,9 @@ public final class Regrade {
         if (Double.isNaN(lastMax) || elev > lastMax) lastMax = elev;
 
         int surfaceY = targetY != null ? targetY : (int) Math.floor(elev);
+        String key = x + "," + z + "," + surfaceY;
+        if (!visited.add(key)) return 0;
+
         BlockPos surface = new BlockPos(x, surfaceY, z);
         clearBlockers(world, surface);
         BlockState mat = materialBeneath(world, surface);
@@ -70,11 +79,36 @@ public final class Regrade {
         int written = 0;
         boolean needsAbove = false;
         boolean needsBelow = false;
+        int maxLocalY = surfaceY;
 
-        // Cut whole blocks above the surface (only for the primary pass).
+        // First pass: find the elevation range so cut-above does not destroy
+        // a continuity block we are about to place and shape.
+        int[][] localYMap = new int[BITS][BITS];
+        int[][] localBitMap = new int[BITS][BITS];
+        boolean[][] valid = new boolean[BITS][BITS];
+        for (int bx = 0; bx < BITS; bx++) {
+            for (int bz = 0; bz < BITS; bz++) {
+                double easting = x + (bx + 0.5) / BITS;
+                double northing = -(z + (bz + 0.5) / BITS);
+                double localElev = TinSurface.elevationAt(pts, easting, northing);
+                if (Double.isNaN(localElev)) continue;
+                int localY = (int) Math.floor(localElev);
+                int localBit = (int) Math.floor((localElev - localY) * BITS);
+                if (localBit < 0) localBit = 0;
+                if (localBit >= BITS) localBit = BITS - 1;
+                localYMap[bx][bz] = localY;
+                localBitMap[bx][bz] = localBit;
+                valid[bx][bz] = true;
+                if (localY > maxLocalY) maxLocalY = localY;
+                if (localY > surfaceY) needsAbove = true;
+                if (localY < surfaceY) needsBelow = true;
+            }
+        }
+
+        // Cut whole blocks strictly above the highest elevation in this column.
         if (targetY == null) {
             BlockState air = Blocks.AIR.defaultBlockState();
-            for (int dy = 1; dy <= CUT_ABOVE; dy++) {
+            for (int dy = maxLocalY - surfaceY + 1; dy <= CUT_ABOVE; dy++) {
                 BlockPos above = new BlockPos(x, surfaceY + dy, z);
                 if (world.getBlockState(above).isAir()) continue;
                 world.setBlock(above, air, 3);
@@ -83,23 +117,20 @@ public final class Regrade {
             }
         }
 
+        // Place the continuity block before chiseling so the mutator has a target.
+        if (world.getBlockState(surface).isAir()) {
+            world.setBlock(surface, mat, 3);
+        }
+
         app.beginBatch(world, surface);
         try {
             app.setBit(world, surface, 0, 0, 0, mat);
 
             for (int bx = 0; bx < BITS; bx++) {
                 for (int bz = 0; bz < BITS; bz++) {
-                    double easting = x + (bx + 0.5) / BITS;
-                    double northing = -(z + (bz + 0.5) / BITS);
-                    double localElev = TinSurface.elevationAt(pts, easting, northing);
-                    if (Double.isNaN(localElev)) continue;
-                    int localY = (int) Math.floor(localElev);
-                    int localBit = (int) Math.floor((localElev - localY) * BITS);
-                    if (localBit < 0) localBit = 0;
-                    if (localBit >= BITS) localBit = BITS - 1;
-
-                    if (localY > surfaceY) needsAbove = true;
-                    if (localY < surfaceY) needsBelow = true;
+                    if (!valid[bx][bz]) continue;
+                    int localY = localYMap[bx][bz];
+                    int localBit = localBitMap[bx][bz];
 
                     // Shape this bit column relative to the surface.
                     // Full if the surface is above this block, partial if it
@@ -122,23 +153,16 @@ public final class Regrade {
             app.endBatch();
         }
 
-        // Continuity: place and queue adjacent blocks the TIN crosses into.
+        // Continuity: process adjacent blocks inline so they are shaped before
+        // any later column can cut or overwrite them.
         if (needsAbove) {
-            BlockPos above = surface.above();
-            if (world.getBlockState(above).isAir()) {
-                world.setBlock(above, mat, 3);
-            }
-            RegradeQueue.enqueueColumnAt(world, x, z, surfaceY + 1);
+            written += column(world, x, z, surfaceY + 1, visited);
         }
         if (needsBelow) {
-            RegradeQueue.enqueueColumnAt(world, x, z, surfaceY - 1);
+            written += column(world, x, z, surfaceY - 1, visited);
         }
 
         return written;
-    }
-
-    public static int column(ServerLevel world, int x, int z) {
-        return column(world, x, z, null);
     }
 
     /** Remove plants, flowers and other non-solid blocks that block chiseling. */
