@@ -15,9 +15,9 @@ import java.util.List;
 
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
- * Fill: dirt bits at and below the interpolated elevation.
- * Cut: clear bits above the surface in the surface block, and set blocks
- * above the surface to air.
+ * Fill: bits of the block beneath, up to the interpolated elevation.
+ * Cut: set blocks above the surface to air, and clear bits above the surface
+ * in the surface block.
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -25,7 +25,7 @@ import java.util.List;
  */
 public final class Regrade {
     private static final int BITS = 16;
-    private static final int CUT_ABOVE = 4;
+    private static final int CUT_ABOVE = 8;
     private static double lastMin = Double.NaN;
     private static double lastMax = Double.NaN;
 
@@ -40,16 +40,23 @@ public final class Regrade {
         if (Double.isNaN(lastMax) || elev > lastMax) lastMax = elev;
 
         int surfaceY = (int) Math.floor(elev);
-        int surfaceBit = (int) Math.floor((elev - surfaceY) * BITS);
-        if (surfaceBit < 0) surfaceBit = 0;
-        if (surfaceBit >= BITS) surfaceBit = BITS - 1;
-
-        BlockState mat = ChiselsAndBitsApplicator.defaultMaterial();
+        BlockPos surface = new BlockPos(x, surfaceY, z);
+        BlockState mat = materialBeneath(world, surface);
         BitApplicator app = BitApplicator.current();
         int written = 0;
 
-        // Fill: dirt bits in the surface block, up to the surface bit.
-        BlockPos surface = new BlockPos(x, surfaceY, z);
+        // Cut first: remove whole blocks above the surface so a failed fill
+        // cannot skip the cut.
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int dy = 1; dy <= CUT_ABOVE; dy++) {
+            BlockPos above = new BlockPos(x, surfaceY + dy, z);
+            if (world.getBlockState(above).isAir()) continue;
+            world.setBlock(above, air, 3);
+            written++;
+        }
+
+        // Fill the surface block with the material beneath, up to the surface bit,
+        // then clear the bits above it.
         for (int bx = 0; bx < BITS; bx++) {
             for (int bz = 0; bz < BITS; bz++) {
                 double easting = x + (bx + 0.5) / BITS;
@@ -64,23 +71,23 @@ public final class Regrade {
                 for (int by = 0; by <= localBit; by++) {
                     if (app.setBit(world, surface, bx, by, bz, mat)) written++;
                 }
-                // Cut: clear bits above the surface in this block.
                 for (int by = localBit + 1; by < BITS; by++) {
                     if (app.clearBit(world, surface, bx, by, bz)) written++;
                 }
             }
         }
-
-        // Cut: remove whole blocks above the surface.
-        BlockState air = Blocks.AIR.defaultBlockState();
-        for (int dy = 1; dy <= CUT_ABOVE; dy++) {
-            BlockPos above = new BlockPos(x, surfaceY + dy, z);
-            BlockState existing = world.getBlockState(above);
-            if (existing.isAir()) continue;
-            world.setBlock(above, air, 3);
-            written++;
-        }
         return written;
+    }
+
+    /** Block state to use for bits: the solid block at or just below the surface. */
+    private static BlockState materialBeneath(ServerLevel world, BlockPos surface) {
+        BlockState here = world.getBlockState(surface);
+        if (!here.isAir() && here.getFluidState().isEmpty()) return here;
+        for (int dy = 1; dy <= 4; dy++) {
+            BlockState below = world.getBlockState(surface.below(dy));
+            if (!below.isAir() && below.getFluidState().isEmpty()) return below;
+        }
+        return ChiselsAndBitsApplicator.defaultMaterial();
     }
 
     public static int block(ServerLevel world, BlockPos origin) {
