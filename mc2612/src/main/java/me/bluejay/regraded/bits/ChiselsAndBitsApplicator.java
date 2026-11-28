@@ -35,6 +35,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static Method overrideInAreaTarget;
     private static Method clearInAreaTarget;
     private static Method batchMethod;
+    private static Method batchClose;
     private static Class<?> blockInformationClass;
     private static volatile boolean resolved = false;
     private static volatile boolean available = false;
@@ -73,6 +74,13 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
             clearInAreaTarget = mutatorClass.getMethod("clearInAreaTarget", Vec3.class);
             batchMethod = mutatorClass.getMethod("batch");
+
+            // Close via the public interface. The concrete BatchMutationLock is a private
+            // inner record of ChiseledBlockEntity; reflecting close() on it throws
+            // IllegalAccessException under Java 25 / Fabric module boundaries.
+            Class<?> batchInterface = Class.forName("mod.chiselsandbits.api.util.IBatchMutation");
+            batchClose = batchInterface.getMethod("close");
+
             resolved = true;
             available = true;
             lastFailure = null;
@@ -129,9 +137,9 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
 
     @Override
     public void endBatch() {
-        if (currentBatch != null) {
+        if (currentBatch != null && batchClose != null) {
             try {
-                currentBatch.getClass().getMethod("close").invoke(currentBatch);
+                batchClose.invoke(currentBatch);
             } catch (Exception e) {
                 lastFailure = describe(e);
             }
