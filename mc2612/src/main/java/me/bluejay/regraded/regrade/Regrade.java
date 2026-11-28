@@ -25,8 +25,10 @@ import java.util.List;
  *
  * Continuity: if the TIN crosses into the block above (air), a solid material
  * block is placed there and queued for regrade. If it crosses into the block
- * below, that block is queued. This keeps the plane contiguous across block
- * boundaries without holes or peaks.
+ * below, that block is queued. When a queued block is processed, every bit
+ * column in it is shaped: full if the surface is above, partial if it
+ * intersects, empty if the surface is below. This keeps the plane contiguous
+ * across block boundaries without holes or peaks.
  *
  * Mojang mappings / 26.1.2.
  *
@@ -96,19 +98,19 @@ public final class Regrade {
                     if (localBit < 0) localBit = 0;
                     if (localBit >= BITS) localBit = BITS - 1;
 
-                    if (localY > surfaceY) {
-                        needsAbove = true;
-                        continue;
-                    }
-                    if (localY < surfaceY) {
-                        needsBelow = true;
-                        continue;
-                    }
+                    if (localY > surfaceY) needsAbove = true;
+                    if (localY < surfaceY) needsBelow = true;
 
-                    for (int by = 0; by <= localBit; by++) {
+                    // Shape this bit column relative to the surface.
+                    // Full if the surface is above this block, partial if it
+                    // intersects, empty if the surface is below.
+                    int fillTo = localY > surfaceY ? BITS - 1
+                            : localY == surfaceY ? localBit
+                            : -1;
+                    for (int by = 0; by <= fillTo; by++) {
                         if (app.setBit(world, surface, bx, by, bz, mat)) written++;
                     }
-                    for (int by = localBit + 1; by < BITS; by++) {
+                    for (int by = fillTo + 1; by < BITS; by++) {
                         if (app.clearBit(world, surface, bx, by, bz)) {
                             lastClearedBits++;
                             written++;
