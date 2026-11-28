@@ -32,6 +32,10 @@ import java.util.Set;
  * the surface is below. Shaping always happens before any whole-block cut,
  * and a block that was just shaped is never set to air in the same call.
  *
+ * Material is locked per column: sampled once at the primary surface and
+ * reused for every continuity block, so a slope does not pick up a vertical
+ * color gradient from layered terrain.
+ *
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -52,7 +56,7 @@ public final class Regrade {
 
     public static int column(ServerLevel world, int x, int z) {
         Set<String> shaped = new HashSet<>();
-        int written = shapeColumn(world, x, z, null, shaped);
+        int written = shapeColumn(world, x, z, null, null, shaped);
         written += cutAboveShaped(world, x, z, shaped);
         return written;
     }
@@ -60,10 +64,12 @@ public final class Regrade {
     /**
      * Shape one block of a column and any adjacent blocks the TIN crosses into.
      * Does not cut whole blocks; that happens after all shaping is done.
-     * {@code shaped} collects every (x,z,y) that was chiseled so the cut pass
-     * can leave them alone.
+     * {@code mat} is the locked material for this column; null on the primary
+     * pass so it is sampled once at the surface. {@code shaped} collects every
+     * (x,z,y) that was chiseled so the cut pass can leave them alone.
      */
-    private static int shapeColumn(ServerLevel world, int x, int z, Integer targetY, Set<String> shaped) {
+    private static int shapeColumn(ServerLevel world, int x, int z, Integer targetY,
+                                   BlockState mat, Set<String> shaped) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
         double elev = TinSurface.elevationAt(pts, x + 0.5, -(z + 0.5));
@@ -77,7 +83,9 @@ public final class Regrade {
 
         BlockPos surface = new BlockPos(x, surfaceY, z);
         clearBlockers(world, surface, shaped);
-        BlockState mat = materialBeneath(world, surface);
+        if (mat == null) {
+            mat = materialBeneath(world, surface);
+        }
         BitApplicator app = BitApplicator.current();
         int written = 0;
         boolean needsAbove = false;
@@ -138,10 +146,10 @@ public final class Regrade {
         }
 
         if (needsAbove) {
-            written += shapeColumn(world, x, z, surfaceY + 1, shaped);
+            written += shapeColumn(world, x, z, surfaceY + 1, mat, shaped);
         }
         if (needsBelow) {
-            written += shapeColumn(world, x, z, surfaceY - 1, shaped);
+            written += shapeColumn(world, x, z, surfaceY - 1, mat, shaped);
         }
 
         return written;
