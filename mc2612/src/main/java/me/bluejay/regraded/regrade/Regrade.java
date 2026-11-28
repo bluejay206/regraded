@@ -32,8 +32,8 @@ import java.util.Set;
  * the surface is below. Shaping always happens before any whole-block cut,
  * and a block that was just shaped is never set to air in the same call.
  *
- * Material is locked per column: sampled once at the primary surface and
- * reused for every continuity block, so a slope does not pick up a vertical
+ * Material is locked for the whole job: the first column samples it and every
+ * later column and continuity block reuses it, so a slope does not pick up a
  * color gradient from layered terrain.
  *
  * Mojang mappings / 26.1.2.
@@ -51,12 +51,18 @@ public final class Regrade {
     private static int lastCutBlocks = 0;
     private static int lastClearedBits = 0;
     private static int lastRemoved = 0;
+    private static BlockState jobMaterial;
 
     private Regrade() {}
 
     public static int column(ServerLevel world, int x, int z) {
+        if (jobMaterial == null) {
+            double elev = TinSurface.elevationAt(Points.list().points(), x + 0.5, -(z + 0.5));
+            int y = Double.isNaN(elev) ? world.getMinY() : (int) Math.floor(elev);
+            jobMaterial = materialBeneath(world, new BlockPos(x, y, z));
+        }
         Set<String> shaped = new HashSet<>();
-        int written = shapeColumn(world, x, z, null, null, shaped);
+        int written = shapeColumn(world, x, z, null, jobMaterial, shaped);
         written += cutAboveShaped(world, x, z, shaped);
         return written;
     }
@@ -64,9 +70,8 @@ public final class Regrade {
     /**
      * Shape one block of a column and any adjacent blocks the TIN crosses into.
      * Does not cut whole blocks; that happens after all shaping is done.
-     * {@code mat} is the locked material for this column; null on the primary
-     * pass so it is sampled once at the surface. {@code shaped} collects every
-     * (x,z,y) that was chiseled so the cut pass can leave them alone.
+     * {@code mat} is the locked material for this job. {@code shaped} collects
+     * every (x,z,y) that was chiseled so the cut pass can leave them alone.
      */
     private static int shapeColumn(ServerLevel world, int x, int z, Integer targetY,
                                    BlockState mat, Set<String> shaped) {
@@ -83,9 +88,6 @@ public final class Regrade {
 
         BlockPos surface = new BlockPos(x, surfaceY, z);
         clearBlockers(world, surface, shaped);
-        if (mat == null) {
-            mat = materialBeneath(world, surface);
-        }
         BitApplicator app = BitApplicator.current();
         int written = 0;
         boolean needsAbove = false;
@@ -264,6 +266,7 @@ public final class Regrade {
         lastCutBlocks = 0;
         lastClearedBits = 0;
         lastRemoved = 0;
+        jobMaterial = null;
     }
 
     public static String elevationRange() {
