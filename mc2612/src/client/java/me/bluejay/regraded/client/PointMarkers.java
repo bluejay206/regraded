@@ -5,9 +5,9 @@ import me.bluejay.regraded.core.SurveyPoint;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -58,17 +58,17 @@ public final class PointMarkers {
         List<SurveyPoint> points = Points.list().points();
         if (points.isEmpty()) return;
 
-        Vec3 cam = client.gameRenderer.getMainCamera().getPosition();
+        Vec3 cam = client.gameRenderer.getMainCamera().position();
         PoseStack pose = context.poseStack();
         MultiBufferSource.BufferSource buffers = context.bufferSource();
-        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
+        VertexConsumer lines = buffers.getBuffer(RenderTypes.lines());
 
         for (SurveyPoint p : points) {
             double x = p.easting();
             double y = p.elevation();
             double z = -p.northing();
             if (cam.distanceToSqr(x, y, z) > 256 * 256) continue;
-            LevelRenderer.renderLineBox(
+            ShapeRenderer.renderLineBox(
                     pose, lines,
                     x - cam.x - HALF, y - cam.y, z - cam.z - HALF,
                     x - cam.x + HALF, y - cam.y + HEIGHT, z - cam.z + HALF,
@@ -76,7 +76,7 @@ public final class PointMarkers {
         }
 
         drawTin(points, cam, pose, lines);
-        buffers.endBatch(RenderType.lines());
+        buffers.endBatch(RenderTypes.lines());
     }
 
     /** White lines from each point to its nearest neighbors. */
