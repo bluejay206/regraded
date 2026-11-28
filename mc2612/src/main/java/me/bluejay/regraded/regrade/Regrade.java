@@ -82,8 +82,7 @@ public final class Regrade {
                         if (app.setBit(world, surface, bx, by, bz, mat)) written++;
                     }
                     for (int by = localBit + 1; by < BITS; by++) {
-                        if (app.clearBit(world, surface, bx, by, bz)
-                                || app.setBit(world, surface, bx, by, bz, air)) {
+                        if (app.clearBit(world, surface, bx, by, bz)) {
                             lastClearedBits++;
                             written++;
                         }
