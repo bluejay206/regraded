@@ -16,8 +16,8 @@ import java.util.List;
 /**
  * Applies a TIN surface to a block column or a chunk using the bit applicator.
  * Fill: bits of the block beneath, up to the interpolated elevation.
- * Cut: set blocks above the surface to air, and clear bits above the surface
- * in the surface block.
+ * Cut: set blocks above the surface to air, convert the surface block, and
+ * clear the bits above the surface elevation.
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -28,6 +28,8 @@ public final class Regrade {
     private static final int CUT_ABOVE = 8;
     private static double lastMin = Double.NaN;
     private static double lastMax = Double.NaN;
+    private static int lastCutBlocks = 0;
+    private static int lastClearedBits = 0;
 
     private Regrade() {}
 
@@ -45,18 +47,21 @@ public final class Regrade {
         BitApplicator app = BitApplicator.current();
         int written = 0;
 
-        // Cut first: remove whole blocks above the surface so a failed fill
-        // cannot skip the cut.
+        // Cut whole blocks above the surface.
         BlockState air = Blocks.AIR.defaultBlockState();
         for (int dy = 1; dy <= CUT_ABOVE; dy++) {
             BlockPos above = new BlockPos(x, surfaceY + dy, z);
             if (world.getBlockState(above).isAir()) continue;
             world.setBlock(above, air, 3);
+            lastCutBlocks++;
             written++;
         }
 
-        // Fill the surface block with the material beneath, up to the surface bit,
-        // then clear the bits above it.
+        // Convert the surface block to a chiseled block so clear works on it.
+        // One setBit is enough; C&B turns the vanilla block into a multi-state block.
+        app.setBit(world, surface, 0, 0, 0, mat);
+
+        // Fill up to the surface bit, then clear every bit above it.
         for (int bx = 0; bx < BITS; bx++) {
             for (int bz = 0; bz < BITS; bz++) {
                 double easting = x + (bx + 0.5) / BITS;
@@ -72,7 +77,10 @@ public final class Regrade {
                     if (app.setBit(world, surface, bx, by, bz, mat)) written++;
                 }
                 for (int by = localBit + 1; by < BITS; by++) {
-                    if (app.clearBit(world, surface, bx, by, bz)) written++;
+                    if (app.clearBit(world, surface, bx, by, bz)) {
+                        lastClearedBits++;
+                        written++;
+                    }
                 }
             }
         }
@@ -91,14 +99,12 @@ public final class Regrade {
     }
 
     public static int block(ServerLevel world, BlockPos origin) {
-        lastMin = Double.NaN;
-        lastMax = Double.NaN;
+        resetStats();
         return column(world, origin.getX(), origin.getZ());
     }
 
     public static int chunk(ServerLevel world, ChunkPos chunk, int unusedSurfaceY) {
-        lastMin = Double.NaN;
-        lastMax = Double.NaN;
+        resetStats();
         int written = 0;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
@@ -108,9 +114,16 @@ public final class Regrade {
         return written;
     }
 
+    private static void resetStats() {
+        lastMin = Double.NaN;
+        lastMax = Double.NaN;
+        lastCutBlocks = 0;
+        lastClearedBits = 0;
+    }
+
     public static String elevationRange() {
         if (Double.isNaN(lastMin)) return "";
-        return String.format(" elev %.2f..%.2f", lastMin, lastMax);
+        return String.format(" elev %.2f..%.2f cut %d blocks, %d bits", lastMin, lastMax, lastCutBlocks, lastClearedBits);
     }
 
     public static String failure() {
