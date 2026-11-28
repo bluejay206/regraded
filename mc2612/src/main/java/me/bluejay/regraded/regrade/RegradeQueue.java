@@ -18,9 +18,8 @@ import java.util.Set;
  * targets. Each column opens one batch, writes its bits, and closes it
  * before the next column starts.
  *
- * Continuity: when a column's TIN crosses into an adjacent vertical block,
- * that block is enqueued (with a specific target Y) so the plane stays
- * contiguous. A processed set prevents re-processing the same (x,z,y).
+ * Continuity across block boundaries is handled inline inside Regrade.column,
+ * so the queue only drives primary (x,z) columns.
  */
 public final class RegradeQueue {
     private static final int COLUMNS_PER_TICK = 4;
@@ -36,31 +35,25 @@ public final class RegradeQueue {
     public static boolean isEmpty() { return QUEUE.isEmpty(); }
 
     public static void enqueueColumn(ServerLevel world, int x, int z, ServerPlayer reporter) {
-        add(world, x, z, null);
+        add(world, x, z);
         RegradeQueue.reporter = reporter;
-        ensureRegistered();
-    }
-
-    /** Enqueue a specific block Y for continuity (called from Regrade.column). */
-    public static void enqueueColumnAt(ServerLevel world, int x, int z, int y) {
-        add(world, x, z, y);
         ensureRegistered();
     }
 
     public static void enqueueChunk(ServerLevel world, ChunkPos chunk, ServerPlayer reporter) {
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                add(world, (chunk.x() << 4) + x, (chunk.z() << 4) + z, null);
+                add(world, (chunk.x() << 4) + x, (chunk.z() << 4) + z);
             }
         }
         RegradeQueue.reporter = reporter;
         ensureRegistered();
     }
 
-    private static void add(ServerLevel world, int x, int z, Integer y) {
-        String key = x + "," + z + "," + (y == null ? "*" : y);
+    private static void add(ServerLevel world, int x, int z) {
+        String key = x + "," + z;
         if (!ENQUEUED.add(key)) return;
-        QUEUE.add(new Job(world, x, z, y));
+        QUEUE.add(new Job(world, x, z));
     }
 
     public static void clear() {
@@ -82,7 +75,7 @@ public final class RegradeQueue {
         while (!QUEUE.isEmpty() && done < COLUMNS_PER_TICK) {
             Job job = QUEUE.poll();
             try {
-                written += Regrade.column(job.world, job.x, job.z, job.y);
+                written += Regrade.column(job.world, job.x, job.z);
             } catch (Exception e) {
                 if (reporter != null) {
                     reporter.sendSystemMessage(Component.literal(
@@ -103,5 +96,5 @@ public final class RegradeQueue {
         }
     }
 
-    private record Job(ServerLevel world, int x, int z, Integer y) {}
+    private record Job(ServerLevel world, int x, int z) {}
 }
