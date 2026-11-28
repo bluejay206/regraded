@@ -28,6 +28,18 @@ public final class PointList {
         points.clear();
     }
 
+    /** Remove the point at index. Returns true if an entry was removed. */
+    public boolean removeAt(int index) {
+        if (index < 0 || index >= points.size()) return false;
+        points.remove(index);
+        return true;
+    }
+
+    public SurveyPoint get(int index) {
+        if (index < 0 || index >= points.size()) return null;
+        return points.get(index);
+    }
+
     /**
      * Remove the point whose (easting, northing) is closest to the given
      * coordinates, if it is within {@code maxDist} blocks. Returns true if

@@ -3,6 +3,7 @@ package me.bluejay.regraded.client;
 import me.bluejay.regraded.JobStore;
 import me.bluejay.regraded.ModItems;
 import me.bluejay.regraded.client.screen.HubScreen;
+
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.core.SurveyPoint;
 import net.fabricmc.api.ClientModInitializer;
@@ -14,13 +15,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ReGradedClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("regraded");
-    private static boolean ctrlZWasDown = false;
     private static final double RAY_RANGE = 100.0;
     private static final double NODE_PICK_RANGE = 1.0;
 
@@ -28,6 +27,7 @@ public class ReGradedClient implements ClientModInitializer {
     public void onInitializeClient() {
         LOGGER.info("ReGraded client initialized (26.1.2)");
         PointMarkers.registerRender();
+        KeyCommands.register();
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             String id = worldId(client);
@@ -49,6 +49,10 @@ public class ReGradedClient implements ClientModInitializer {
             if (stack.is(ModItems.ADD_NODE)) {
                 return addNode(mc);
             }
+            if (stack.is(ModItems.ADD_NODE_PLAYER)) {
+                KeyCommands.addNodeAtPlayer(mc);
+                return InteractionResult.SUCCESS;
+            }
             if (stack.is(ModItems.DELETE_NODE)) {
                 return deleteNode(mc);
             }
@@ -56,17 +60,6 @@ public class ReGradedClient implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.getWindow() == null) return;
-            long handle = client.getWindow().handle();
-            boolean ctrl = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
-                    || GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
-            boolean z = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_Z) == GLFW.GLFW_PRESS;
-            boolean down = ctrl && z;
-            if (down && !ctrlZWasDown) {
-                PointMarkers.toggle();
-            }
-            ctrlZWasDown = down;
-            PointMarkers.tick(client);
             updateDeleteHighlight(client);
         });
     }

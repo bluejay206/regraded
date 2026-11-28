@@ -3,6 +3,9 @@
   "item.regraded.regrade_chunk": "Regrade Chunk",
   "item.regraded.remove_tool": "Remove Tool",
   "item.regraded.add_node": "Add Node",
+  "item.regraded.add_node_player": "Add Node (Player)",
+  "key.regraded.markers": "Toggle Markers",
+  "key.regraded.add_node_player": "Add Node at Player",
   "item.regraded.delete_node": "Delete Node",
   "item.regraded.hub": "ReGraded Hub",
   "itemGroup.regraded.main": "ReGraded"

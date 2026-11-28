@@ -22,6 +22,7 @@ public final class ModTabs {
                 output.accept(ModItems.REGRADE_CHUNK);
                 output.accept(ModItems.REMOVE_TOOL);
                 output.accept(ModItems.ADD_NODE);
+                output.accept(ModItems.ADD_NODE_PLAYER);
                 output.accept(ModItems.DELETE_NODE);
             })
             .build();
