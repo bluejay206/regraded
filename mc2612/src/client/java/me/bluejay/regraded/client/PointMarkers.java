@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
@@ -68,11 +67,7 @@ public final class PointMarkers {
             double y = p.elevation();
             double z = -p.northing();
             if (cam.distanceToSqr(x, y, z) > 256 * 256) continue;
-            ShapeRenderer.renderLineBox(
-                    pose, lines,
-                    x - cam.x - HALF, y - cam.y, z - cam.z - HALF,
-                    x - cam.x + HALF, y - cam.y + HEIGHT, z - cam.z + HALF,
-                    1.0f, 1.0f, 1.0f, 1.0f);
+            box(pose, lines, cam, x, y, z);
         }
 
         drawTin(points, cam, pose, lines);
@@ -112,6 +107,25 @@ public final class PointMarkers {
                 line(pose, lines, cam, ax, ay, az, b.easting(), b.elevation(), -b.northing());
             }
         }
+    }
+
+    /** White 0.1 x 0.5 outline box at a point. */
+    private static void box(PoseStack pose, VertexConsumer lines, Vec3 cam, double x, double y, double z) {
+        double x0 = x - HALF, x1 = x + HALF;
+        double y0 = y, y1 = y + HEIGHT;
+        double z0 = z - HALF, z1 = z + HALF;
+        line(pose, lines, cam, x0, y0, z0, x1, y0, z0);
+        line(pose, lines, cam, x1, y0, z0, x1, y0, z1);
+        line(pose, lines, cam, x1, y0, z1, x0, y0, z1);
+        line(pose, lines, cam, x0, y0, z1, x0, y0, z0);
+        line(pose, lines, cam, x0, y1, z0, x1, y1, z0);
+        line(pose, lines, cam, x1, y1, z0, x1, y1, z1);
+        line(pose, lines, cam, x1, y1, z1, x0, y1, z1);
+        line(pose, lines, cam, x0, y1, z1, x0, y1, z0);
+        line(pose, lines, cam, x0, y0, z0, x0, y1, z0);
+        line(pose, lines, cam, x1, y0, z0, x1, y1, z0);
+        line(pose, lines, cam, x1, y0, z1, x1, y1, z1);
+        line(pose, lines, cam, x0, y0, z1, x0, y1, z1);
     }
 
     private static void line(PoseStack pose, VertexConsumer lines, Vec3 cam,
