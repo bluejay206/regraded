@@ -25,6 +25,17 @@ public interface BitApplicator {
         return false;
     }
 
+    /**
+     * Open a batch for one block. Subsequent setBit/clearBit calls on the same
+     * position reuse the same mutator until {@link #endBatch()} is called.
+     * This keeps C&B's internal command buffer from filling and dumping onto
+     * the last target.
+     */
+    default void beginBatch(Level world, BlockPos blockPos) {}
+
+    /** Commit and close the current batch, if one is open. */
+    default void endBatch() {}
+
     static BitApplicator current() {
         return Holder.INSTANCE;
     }

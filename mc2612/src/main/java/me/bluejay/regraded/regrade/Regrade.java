@@ -60,32 +60,38 @@ public final class Regrade {
             written++;
         }
 
-        // Convert the surface block to a chiseled block so clear works on it.
-        app.setBit(world, surface, 0, 0, 0, mat);
+        // One mutator for the whole block, committed before the next column.
+        app.beginBatch(world, surface);
+        try {
+            // Convert the surface block to a chiseled block so clear works on it.
+            app.setBit(world, surface, 0, 0, 0, mat);
 
-        // Fill up to the surface bit, then clear every bit above it.
-        for (int bx = 0; bx < BITS; bx++) {
-            for (int bz = 0; bz < BITS; bz++) {
-                double easting = x + (bx + 0.5) / BITS;
-                double northing = -(z + (bz + 0.5) / BITS);
-                double localElev = TinSurface.elevationAt(pts, easting, northing);
-                if (Double.isNaN(localElev)) continue;
-                int localY = (int) Math.floor(localElev);
-                int localBit = (int) Math.floor((localElev - localY) * BITS);
-                if (localBit < 0) localBit = 0;
-                if (localBit >= BITS) localBit = BITS - 1;
-                if (localY != surfaceY) continue;
-                for (int by = 0; by <= localBit; by++) {
-                    if (app.setBit(world, surface, bx, by, bz, mat)) written++;
-                }
-                for (int by = localBit + 1; by < BITS; by++) {
-                    if (app.clearBit(world, surface, bx, by, bz)
-                            || app.setBit(world, surface, bx, by, bz, air)) {
-                        lastClearedBits++;
-                        written++;
+            // Fill up to the surface bit, then clear every bit above it.
+            for (int bx = 0; bx < BITS; bx++) {
+                for (int bz = 0; bz < BITS; bz++) {
+                    double easting = x + (bx + 0.5) / BITS;
+                    double northing = -(z + (bz + 0.5) / BITS);
+                    double localElev = TinSurface.elevationAt(pts, easting, northing);
+                    if (Double.isNaN(localElev)) continue;
+                    int localY = (int) Math.floor(localElev);
+                    int localBit = (int) Math.floor((localElev - localY) * BITS);
+                    if (localBit < 0) localBit = 0;
+                    if (localBit >= BITS) localBit = BITS - 1;
+                    if (localY != surfaceY) continue;
+                    for (int by = 0; by <= localBit; by++) {
+                        if (app.setBit(world, surface, bx, by, bz, mat)) written++;
+                    }
+                    for (int by = localBit + 1; by < BITS; by++) {
+                        if (app.clearBit(world, surface, bx, by, bz)
+                                || app.setBit(world, surface, bx, by, bz, air)) {
+                            lastClearedBits++;
+                            written++;
+                        }
                     }
                 }
             }
+        } finally {
+            app.endBatch();
         }
         return written;
     }
@@ -131,7 +137,7 @@ public final class Regrade {
         return written;
     }
 
-    private static void resetStats() {
+    static void resetStats() {
         lastMin = Double.NaN;
         lastMax = Double.NaN;
         lastCutBlocks = 0;

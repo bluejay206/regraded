@@ -25,10 +25,16 @@ public final class PointMarkers {
     private static final double HEIGHT = 0.5;
     private static boolean visible;
     private static boolean renderRegistered;
+    /** Index of the node under the delete-tool crosshair, or -1. */
+    private static int highlightIndex = -1;
 
     private PointMarkers() {}
 
     public static boolean visible() { return visible; }
+
+    public static void setHighlight(int index) {
+        highlightIndex = index;
+    }
 
     public static void toggle() {
         visible = !visible;
@@ -48,10 +54,11 @@ public final class PointMarkers {
     }
 
     private static void render(LevelRenderContext context) {
-        if (!visible) return;
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.gameRenderer == null) return;
         List<SurveyPoint> points = Points.list().points();
+        boolean hasHighlight = highlightIndex >= 0 && highlightIndex < points.size();
+        if (!visible && !hasHighlight) return;
         if (points.isEmpty()) return;
 
         Vec3 cam = client.gameRenderer.getMainCamera().position();
@@ -59,15 +66,25 @@ public final class PointMarkers {
         MultiBufferSource.BufferSource buffers = context.bufferSource();
         VertexConsumer lines = buffers.getBuffer(RenderTypes.lines());
 
-        for (SurveyPoint p : points) {
-            double x = p.easting();
-            double y = p.elevation();
-            double z = -p.northing();
-            if (cam.distanceToSqr(x, y, z) > 256 * 256) continue;
-            box(pose, lines, cam, x, y, z);
+        if (visible) {
+            for (SurveyPoint p : points) {
+                double x = p.easting();
+                double y = p.elevation();
+                double z = -p.northing();
+                if (cam.distanceToSqr(x, y, z) > 256 * 256) continue;
+                box(pose, lines, cam, x, y, z, 1.0f, 1.0f, 1.0f);
+            }
+            drawTin(points, cam, pose, lines);
         }
 
-        drawTin(points, cam, pose, lines);
+        if (hasHighlight) {
+            SurveyPoint h = points.get(highlightIndex);
+            double x = h.easting();
+            double y = h.elevation();
+            double z = -h.northing();
+            box(pose, lines, cam, x, y, z, 1.0f, 0.85f, 0.2f);
+        }
+
         buffers.endBatch(RenderTypes.lines());
     }
 
@@ -86,27 +103,34 @@ public final class PointMarkers {
         }
     }
 
-    /** White 0.1 x 0.5 outline box at a point. */
-    private static void box(PoseStack pose, VertexConsumer lines, Vec3 cam, double x, double y, double z) {
+    /** White 0.1 x 0.5 outline box at a point. Color is per-call so the hover can be yellow. */
+    private static void box(PoseStack pose, VertexConsumer lines, Vec3 cam,
+                            double x, double y, double z, float r, float g, float b) {
         double x0 = x - HALF, x1 = x + HALF;
         double y0 = y, y1 = y + HEIGHT;
         double z0 = z - HALF, z1 = z + HALF;
-        line(pose, lines, cam, x0, y0, z0, x1, y0, z0);
-        line(pose, lines, cam, x1, y0, z0, x1, y0, z1);
-        line(pose, lines, cam, x1, y0, z1, x0, y0, z1);
-        line(pose, lines, cam, x0, y0, z1, x0, y0, z0);
-        line(pose, lines, cam, x0, y1, z0, x1, y1, z0);
-        line(pose, lines, cam, x1, y1, z0, x1, y1, z1);
-        line(pose, lines, cam, x1, y1, z1, x0, y1, z1);
-        line(pose, lines, cam, x0, y1, z1, x0, y1, z0);
-        line(pose, lines, cam, x0, y0, z0, x0, y1, z0);
-        line(pose, lines, cam, x1, y0, z0, x1, y1, z0);
-        line(pose, lines, cam, x1, y0, z1, x1, y1, z1);
-        line(pose, lines, cam, x0, y0, z1, x0, y1, z1);
+        line(pose, lines, cam, x0, y0, z0, x1, y0, z0, r, g, b);
+        line(pose, lines, cam, x1, y0, z0, x1, y0, z1, r, g, b);
+        line(pose, lines, cam, x1, y0, z1, x0, y0, z1, r, g, b);
+        line(pose, lines, cam, x0, y0, z1, x0, y0, z0, r, g, b);
+        line(pose, lines, cam, x0, y1, z0, x1, y1, z0, r, g, b);
+        line(pose, lines, cam, x1, y1, z0, x1, y1, z1, r, g, b);
+        line(pose, lines, cam, x1, y1, z1, x0, y1, z1, r, g, b);
+        line(pose, lines, cam, x0, y1, z1, x0, y1, z0, r, g, b);
+        line(pose, lines, cam, x0, y0, z0, x0, y1, z0, r, g, b);
+        line(pose, lines, cam, x1, y0, z0, x1, y1, z0, r, g, b);
+        line(pose, lines, cam, x1, y0, z1, x1, y1, z1, r, g, b);
+        line(pose, lines, cam, x0, y0, z1, x0, y1, z1, r, g, b);
     }
 
     private static void line(PoseStack pose, VertexConsumer lines, Vec3 cam,
                              double x1, double y1, double z1, double x2, double y2, double z2) {
+        line(pose, lines, cam, x1, y1, z1, x2, y2, z2, 1.0f, 1.0f, 1.0f);
+    }
+
+    private static void line(PoseStack pose, VertexConsumer lines, Vec3 cam,
+                             double x1, double y1, double z1, double x2, double y2, double z2,
+                             float r, float g, float b) {
         float dx = (float) (x2 - x1);
         float dy = (float) (y2 - y1);
         float dz = (float) (z2 - z1);
@@ -115,11 +139,11 @@ public final class PointMarkers {
         float nx = dx / len, ny = dy / len, nz = dz / len;
         var poseEntry = pose.last();
         lines.addVertex(poseEntry, (float) (x1 - cam.x), (float) (y1 - cam.y), (float) (z1 - cam.z))
-                .setColor(1.0f, 1.0f, 1.0f, 1.0f)
+                .setColor(r, g, b, 1.0f)
                 .setNormal(poseEntry, nx, ny, nz)
                 .setLineWidth(1.0f);
         lines.addVertex(poseEntry, (float) (x2 - cam.x), (float) (y2 - cam.y), (float) (z2 - cam.z))
-                .setColor(1.0f, 1.0f, 1.0f, 1.0f)
+                .setColor(r, g, b, 1.0f)
                 .setNormal(poseEntry, nx, ny, nz)
                 .setLineWidth(1.0f);
     }

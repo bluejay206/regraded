@@ -20,6 +20,9 @@ import java.util.Optional;
  * load the API through a different classloader: on 26.1.2 everything is on Knot, and a second
  * Class.forName(name, true, otherLoader) or getEntrypointContainers call disturbs C&B's static
  * Holder/config.
+ *
+ * Batching: beginBatch opens one mutator and calls batch(); setBit/clearBit reuse it;
+ * endBatch calls close() so C&B commits the block before the next target is touched.
  */
 public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static final String MOD_ID = "chiselsandbits";
@@ -31,10 +34,14 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     private static Method in;
     private static Method overrideInAreaTarget;
     private static Method clearInAreaTarget;
+    private static Method batchMethod;
     private static Class<?> blockInformationClass;
     private static volatile boolean resolved = false;
     private static volatile boolean available = false;
     private static String lastFailure = null;
+
+    private static Object currentMutator;
+    private static Object currentBatch;
 
     private static synchronized boolean ensureResolved() {
         if (resolved && available) return true;
@@ -65,6 +72,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             blockInformationClass = Class.forName("mod.chiselsandbits.api.blockinformation.BlockInformation");
             overrideInAreaTarget = mutatorClass.getMethod("overrideInAreaTarget", blockInformationClass, Vec3.class);
             clearInAreaTarget = mutatorClass.getMethod("clearInAreaTarget", Vec3.class);
+            batchMethod = mutatorClass.getMethod("batch");
             resolved = true;
             available = true;
             lastFailure = null;
@@ -101,11 +109,48 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
     }
 
     @Override
+    public void beginBatch(Level world, BlockPos blockPos) {
+        endBatch();
+        if (!ensureResolved()) return;
+        try {
+            currentMutator = mutatorFor(world, blockPos);
+            if (currentMutator == null) {
+                lastFailure = "IMutatorFactory.in() returned null";
+                return;
+            }
+            currentBatch = batchMethod.invoke(currentMutator);
+            lastFailure = null;
+        } catch (Exception e) {
+            lastFailure = describe(e);
+            currentMutator = null;
+            currentBatch = null;
+        }
+    }
+
+    @Override
+    public void endBatch() {
+        if (currentBatch != null) {
+            try {
+                currentBatch.getClass().getMethod("close").invoke(currentBatch);
+            } catch (Exception e) {
+                lastFailure = describe(e);
+            }
+        }
+        currentBatch = null;
+        currentMutator = null;
+    }
+
+    private Object mutator(Level world, BlockPos blockPos) throws Exception {
+        if (currentMutator != null) return currentMutator;
+        return mutatorFor(world, blockPos);
+    }
+
+    @Override
     public boolean setBit(Level world, BlockPos blockPos, int x, int y, int z, BlockState material) {
         if (!ensureResolved()) return false;
         Vec3 local = new Vec3((x + 0.5) / BITS, (y + 0.5) / BITS, (z + 0.5) / BITS);
         try {
-            Object mutator = mutatorFor(world, blockPos);
+            Object mutator = mutator(world, blockPos);
             if (mutator == null) {
                 lastFailure = "IMutatorFactory.in() returned null";
                 return false;
@@ -126,7 +171,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
         if (!ensureResolved()) return false;
         Vec3 local = new Vec3((x + 0.5) / BITS, (y + 0.5) / BITS, (z + 0.5) / BITS);
         try {
-            Object mutator = mutatorFor(world, blockPos);
+            Object mutator = mutator(world, blockPos);
             if (mutator == null) {
                 lastFailure = "IMutatorFactory.in() returned null";
                 return false;

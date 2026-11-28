@@ -5,12 +5,17 @@ import me.bluejay.regraded.bits.ChiselsAndBitsApplicator;
 import me.bluejay.regraded.command.RgCommands;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ReGradedMod implements ModInitializer {
     public static final String MOD_ID = "regraded";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    public static Identifier id(String path) {
+        return Identifier.of(MOD_ID, path);
+    }
 
     @Override
     public void onInitialize() {
@@ -25,6 +30,9 @@ public class ReGradedMod implements ModInitializer {
             LOGGER.info("Chisels & Bits not present. Regrade will queue only.");
         }
         RgCommands.register();
+        ModItems.register();
+        ModTabs.register();
+        ItemHandlers.register();
         LOGGER.info("ReGraded (26.1.2) loaded.");
     }
 }

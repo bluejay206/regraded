@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import me.bluejay.regraded.JobStore;
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.regrade.Regrade;
+import me.bluejay.regraded.regrade.RegradeQueue;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -49,6 +50,20 @@ public final class RgCommands {
                                     ctx.getSource().sendSuccess(() -> Component.literal("Point list cleared."), false);
                                     return 1;
                                 }))
+                        .then(Commands.literal("status")
+                                .executes(ctx -> {
+                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                            "Queue: " + RegradeQueue.size() + " columns"), false);
+                                    return 1;
+                                }))
+                        .then(Commands.literal("cancel")
+                                .executes(ctx -> {
+                                    int n = RegradeQueue.size();
+                                    RegradeQueue.clear();
+                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                            "Cancelled " + n + " queued columns."), false);
+                                    return 1;
+                                }))
                         .then(Commands.literal("count")
                                 .executes(ctx -> {
                                     ctx.getSource().sendSuccess(() -> Component.literal("Points: " + Points.size()), false);
@@ -82,9 +97,8 @@ public final class RgCommands {
         }
         ServerLevel world = source.getLevel();
         BlockPos pos = BlockPos.containing(source.getPosition());
-        int written = Regrade.block(world, pos);
-        String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded column at " + pos.getX() + "," + pos.getZ() + " (" + written + " bits)" + s + "."), false);
+        RegradeQueue.enqueueColumn(world, pos.getX(), pos.getZ(), source.getPlayer());
+        source.sendSuccess(() -> Component.literal("Queued column at " + pos.getX() + "," + pos.getZ() + " (" + RegradeQueue.size() + " in queue)."), false);
         return 1;
     }
 
@@ -105,9 +119,8 @@ public final class RgCommands {
         }
         ServerLevel world = source.getLevel();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
-        int written = Regrade.block(world, pos);
-        String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded column under raycast at " + pos.getX() + "," + pos.getZ() + " (" + written + " bits)" + s + "."), false);
+        RegradeQueue.enqueueColumn(world, pos.getX(), pos.getZ(), player);
+        source.sendSuccess(() -> Component.literal("Queued column under raycast at " + pos.getX() + "," + pos.getZ() + " (" + RegradeQueue.size() + " in queue)."), false);
         return 1;
     }
 
@@ -119,9 +132,8 @@ public final class RgCommands {
         ServerLevel world = source.getLevel();
         BlockPos playerPos = BlockPos.containing(source.getPosition());
         ChunkPos chunk = new ChunkPos(playerPos.getX() >> 4, playerPos.getZ() >> 4);
-        int written = Regrade.chunk(world, chunk, 0);
-        String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded chunk " + chunk.x() + "," + chunk.z() + " (" + written + " bits)" + s + "."), false);
+        RegradeQueue.enqueueChunk(world, chunk, source.getPlayer());
+        source.sendSuccess(() -> Component.literal("Queued chunk " + chunk.x() + "," + chunk.z() + " (" + RegradeQueue.size() + " columns)."), false);
         return 1;
     }
 
@@ -143,9 +155,8 @@ public final class RgCommands {
         ServerLevel world = source.getLevel();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
-        int written = Regrade.chunk(world, chunk, pos.getY());
-        String s = status(written);
-        source.sendSuccess(() -> Component.literal("Regraded chunk under raycast " + chunk.x() + "," + chunk.z() + " (" + written + " bits)" + s + "."), false);
+        RegradeQueue.enqueueChunk(world, chunk, player);
+        source.sendSuccess(() -> Component.literal("Queued chunk under raycast " + chunk.x() + "," + chunk.z() + " (" + RegradeQueue.size() + " columns)."), false);
         return 1;
     }
 
