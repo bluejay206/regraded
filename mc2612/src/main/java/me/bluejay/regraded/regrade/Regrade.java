@@ -29,8 +29,8 @@ import java.util.Set;
  * block is placed there and processed immediately. If it crosses into the
  * block below, that block is processed immediately. Every bit column is
  * shaped: full if the surface is above, partial if it intersects, empty if
- * the surface is below. This keeps the plane contiguous across block
- * boundaries without holes or peaks.
+ * the surface is below. Shaping always happens before any whole-block cut,
+ * and a block that was just shaped is never set to air in the same call.
  *
  * Mojang mappings / 26.1.2.
  *
@@ -51,16 +51,19 @@ public final class Regrade {
     private Regrade() {}
 
     public static int column(ServerLevel world, int x, int z) {
-        return column(world, x, z, null, new HashSet<>());
+        Set<String> shaped = new HashSet<>();
+        int written = shapeColumn(world, x, z, null, shaped);
+        written += cutAboveShaped(world, x, z, shaped);
+        return written;
     }
 
     /**
-     * Process one block of a column. {@code targetY} is the block Y to chisel;
-     * pass null to derive it from the center elevation. Adjacent blocks the TIN
-     * crosses into are placed (if air) and processed inline before returning.
-     * {@code visited} prevents reprocessing the same (x,z,y) in one call chain.
+     * Shape one block of a column and any adjacent blocks the TIN crosses into.
+     * Does not cut whole blocks; that happens after all shaping is done.
+     * {@code shaped} collects every (x,z,y) that was chiseled so the cut pass
+     * can leave them alone.
      */
-    public static int column(ServerLevel world, int x, int z, Integer targetY, Set<String> visited) {
+    private static int shapeColumn(ServerLevel world, int x, int z, Integer targetY, Set<String> shaped) {
         List<SurveyPoint> pts = Points.list().points();
         if (pts.isEmpty()) return 0;
         double elev = TinSurface.elevationAt(pts, x + 0.5, -(z + 0.5));
@@ -70,19 +73,16 @@ public final class Regrade {
 
         int surfaceY = targetY != null ? targetY : (int) Math.floor(elev);
         String key = x + "," + z + "," + surfaceY;
-        if (!visited.add(key)) return 0;
+        if (!shaped.add(key)) return 0;
 
         BlockPos surface = new BlockPos(x, surfaceY, z);
-        clearBlockers(world, surface);
+        clearBlockers(world, surface, shaped);
         BlockState mat = materialBeneath(world, surface);
         BitApplicator app = BitApplicator.current();
         int written = 0;
         boolean needsAbove = false;
         boolean needsBelow = false;
-        int maxLocalY = surfaceY;
 
-        // First pass: find the elevation range so cut-above does not destroy
-        // a continuity block we are about to place and shape.
         int[][] localYMap = new int[BITS][BITS];
         int[][] localBitMap = new int[BITS][BITS];
         boolean[][] valid = new boolean[BITS][BITS];
@@ -99,25 +99,12 @@ public final class Regrade {
                 localYMap[bx][bz] = localY;
                 localBitMap[bx][bz] = localBit;
                 valid[bx][bz] = true;
-                if (localY > maxLocalY) maxLocalY = localY;
                 if (localY > surfaceY) needsAbove = true;
                 if (localY < surfaceY) needsBelow = true;
             }
         }
 
-        // Cut whole blocks strictly above the highest elevation in this column.
-        if (targetY == null) {
-            BlockState air = Blocks.AIR.defaultBlockState();
-            for (int dy = maxLocalY - surfaceY + 1; dy <= CUT_ABOVE; dy++) {
-                BlockPos above = new BlockPos(x, surfaceY + dy, z);
-                if (world.getBlockState(above).isAir()) continue;
-                world.setBlock(above, air, 3);
-                lastCutBlocks++;
-                written++;
-            }
-        }
-
-        // Place the continuity block before chiseling so the mutator has a target.
+        // Place a solid target if the block is air so the mutator can convert it.
         if (world.getBlockState(surface).isAir()) {
             world.setBlock(surface, mat, 3);
         }
@@ -132,9 +119,6 @@ public final class Regrade {
                     int localY = localYMap[bx][bz];
                     int localBit = localBitMap[bx][bz];
 
-                    // Shape this bit column relative to the surface.
-                    // Full if the surface is above this block, partial if it
-                    // intersects, empty if the surface is below.
                     int fillTo = localY > surfaceY ? BITS - 1
                             : localY == surfaceY ? localBit
                             : -1;
@@ -153,23 +137,52 @@ public final class Regrade {
             app.endBatch();
         }
 
-        // Continuity: process adjacent blocks inline so they are shaped before
-        // any later column can cut or overwrite them.
         if (needsAbove) {
-            written += column(world, x, z, surfaceY + 1, visited);
+            written += shapeColumn(world, x, z, surfaceY + 1, shaped);
         }
         if (needsBelow) {
-            written += column(world, x, z, surfaceY - 1, visited);
+            written += shapeColumn(world, x, z, surfaceY - 1, shaped);
         }
 
         return written;
     }
 
-    /** Remove plants, flowers and other non-solid blocks that block chiseling. */
-    private static void clearBlockers(ServerLevel world, BlockPos surface) {
+    /**
+     * After all shaping, remove whole blocks above the highest shaped block.
+     * Never touches a block that was just chiseled.
+     */
+    private static int cutAboveShaped(ServerLevel world, int x, int z, Set<String> shaped) {
+        int maxY = Integer.MIN_VALUE;
+        for (String key : shaped) {
+            if (!key.startsWith(x + "," + z + ",")) continue;
+            int y = Integer.parseInt(key.substring(key.lastIndexOf(',') + 1));
+            if (y > maxY) maxY = y;
+        }
+        if (maxY == Integer.MIN_VALUE) return 0;
+
+        int written = 0;
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int dy = 1; dy <= CUT_ABOVE; dy++) {
+            int y = maxY + dy;
+            String key = x + "," + z + "," + y;
+            if (shaped.contains(key)) continue;
+            BlockPos above = new BlockPos(x, y, z);
+            if (world.getBlockState(above).isAir()) continue;
+            world.setBlock(above, air, 3);
+            lastCutBlocks++;
+            written++;
+        }
+        return written;
+    }
+
+    /** Remove plants, flowers and other non-solid blocks that block chiseling.
+     *  Skips any block we have already shaped in this call. */
+    private static void clearBlockers(ServerLevel world, BlockPos surface, Set<String> shaped) {
         BlockState air = Blocks.AIR.defaultBlockState();
         for (int dy = 0; dy <= CUT_ABOVE; dy++) {
             BlockPos pos = surface.above(dy);
+            String key = pos.getX() + "," + pos.getZ() + "," + pos.getY();
+            if (shaped.contains(key)) continue;
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) continue;
             if (!state.isSolidRender()) {
