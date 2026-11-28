@@ -139,10 +139,12 @@ public final class PointMarkers {
         var poseEntry = pose.last();
         lines.addVertex(poseEntry, (float) (x1 - cam.x), (float) (y1 - cam.y), (float) (z1 - cam.z))
                 .setColor(1.0f, 1.0f, 1.0f, 1.0f)
-                .setNormal(poseEntry, nx, ny, nz);
+                .setNormal(poseEntry, nx, ny, nz)
+                .setLineWidth(1.0f);
         lines.addVertex(poseEntry, (float) (x2 - cam.x), (float) (y2 - cam.y), (float) (z2 - cam.z))
                 .setColor(1.0f, 1.0f, 1.0f, 1.0f)
-                .setNormal(poseEntry, nx, ny, nz);
+                .setNormal(poseEntry, nx, ny, nz)
+                .setLineWidth(1.0f);
     }
 
     private static double distSq(SurveyPoint a, SurveyPoint b) {
