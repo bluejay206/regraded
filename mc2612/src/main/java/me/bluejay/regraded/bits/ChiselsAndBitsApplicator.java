@@ -116,7 +116,7 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             lastFailure = null;
             return true;
         } catch (Exception e) {
-            lastFailure = e.getClass().getSimpleName() + ": " + e.getMessage();
+            lastFailure = describe(e);
             return false;
         }
     }
@@ -135,8 +135,17 @@ public final class ChiselsAndBitsApplicator implements BitApplicator {
             lastFailure = null;
             return true;
         } catch (Exception e) {
-            lastFailure = e.getClass().getSimpleName() + ": " + e.getMessage();
+            lastFailure = describe(e);
             return false;
         }
+    }
+
+    private static String describe(Exception e) {
+        Throwable t = e;
+        if (e instanceof java.lang.reflect.InvocationTargetException ite && ite.getCause() != null) {
+            t = ite.getCause();
+        }
+        String msg = t.getMessage();
+        return t.getClass().getSimpleName() + (msg == null || msg.isBlank() ? "" : ": " + msg);
     }
 }
