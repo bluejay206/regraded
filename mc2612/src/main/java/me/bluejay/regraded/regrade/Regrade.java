@@ -18,6 +18,8 @@ import java.util.List;
  * Fill: bits of the block beneath, up to the interpolated elevation.
  * Cut: set blocks above the surface to air, convert the surface block, and
  * clear the bits above the surface elevation.
+ * Plants, flowers and other non-solid blocks at and above the surface are
+ * removed first so they cannot block the chisel.
  * Mojang mappings / 26.1.2.
  *
  * Coordinate convention matches LevelHeaded and the white markers:
@@ -43,6 +45,7 @@ public final class Regrade {
 
         int surfaceY = (int) Math.floor(elev);
         BlockPos surface = new BlockPos(x, surfaceY, z);
+        clearBlockers(world, surface);
         BlockState mat = materialBeneath(world, surface);
         BitApplicator app = BitApplicator.current();
         int written = 0;
@@ -58,7 +61,6 @@ public final class Regrade {
         }
 
         // Convert the surface block to a chiseled block so clear works on it.
-        // One setBit is enough; C&B turns the vanilla block into a multi-state block.
         app.setBit(world, surface, 0, 0, 0, mat);
 
         // Fill up to the surface bit, then clear every bit above it.
@@ -77,7 +79,8 @@ public final class Regrade {
                     if (app.setBit(world, surface, bx, by, bz, mat)) written++;
                 }
                 for (int by = localBit + 1; by < BITS; by++) {
-                    if (app.clearBit(world, surface, bx, by, bz)) {
+                    if (app.clearBit(world, surface, bx, by, bz)
+                            || app.setBit(world, surface, bx, by, bz, air)) {
                         lastClearedBits++;
                         written++;
                     }
@@ -87,13 +90,27 @@ public final class Regrade {
         return written;
     }
 
+    /** Remove plants, flowers and other non-solid blocks that block chiseling. */
+    private static void clearBlockers(ServerLevel world, BlockPos surface) {
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int dy = 0; dy <= CUT_ABOVE; dy++) {
+            BlockPos pos = surface.above(dy);
+            BlockState state = world.getBlockState(pos);
+            if (state.isAir()) continue;
+            if (!state.isSolidRender()) {
+                world.setBlock(pos, air, 3);
+                lastCutBlocks++;
+            }
+        }
+    }
+
     /** Block state to use for bits: the solid block at or just below the surface. */
     private static BlockState materialBeneath(ServerLevel world, BlockPos surface) {
         BlockState here = world.getBlockState(surface);
-        if (!here.isAir() && here.getFluidState().isEmpty()) return here;
+        if (!here.isAir() && here.isSolidRender() && here.getFluidState().isEmpty()) return here;
         for (int dy = 1; dy <= 4; dy++) {
             BlockState below = world.getBlockState(surface.below(dy));
-            if (!below.isAir() && below.getFluidState().isEmpty()) return below;
+            if (!below.isAir() && below.isSolidRender() && below.getFluidState().isEmpty()) return below;
         }
         return ChiselsAndBitsApplicator.defaultMaterial();
     }
