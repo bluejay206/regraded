@@ -1,6 +1,7 @@
 package me.bluejay.regraded;
 
 import me.bluejay.regraded.core.Points;
+import me.bluejay.regraded.regrade.Regrade;
 import me.bluejay.regraded.regrade.RegradeQueue;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.network.chat.Component;
@@ -40,6 +41,9 @@ public final class ItemHandlers {
             if (stack.is(ModItems.REMOVE_TOOL)) {
                 return removeChiseled(sp, level);
             }
+            if (stack.is(ModItems.REMOVE_CHUNK)) {
+                return removeChunk(sp, level);
+            }
             return InteractionResult.PASS;
         });
     }
@@ -71,9 +75,11 @@ public final class ItemHandlers {
                 ? ((BlockHitResult) hit).getBlockPos()
                 : player.blockPosition();
         ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
         RegradeQueue.enqueueChunk(world, chunk, player);
         player.sendSystemMessage(Component.literal(
-                "Queued chunk " + chunk.x() + "," + chunk.z() + " (" + RegradeQueue.size() + " columns)."));
+                "Removed " + removed + " chiseled blocks, queued chunk " + chunk.x() + "," + chunk.z()
+                        + " (" + RegradeQueue.size() + " columns)."));
         return InteractionResult.SUCCESS;
     }
 
@@ -88,6 +94,18 @@ public final class ItemHandlers {
         player.sendSystemMessage(Component.literal(
                 "Cleared chiseled column at " + pos.getX() + "," + pos.getZ()
                         + " (" + cleared + " blocks)."));
+        return InteractionResult.SUCCESS;
+    }
+
+    private static InteractionResult removeChunk(ServerPlayer player, ServerLevel world) {
+        HitResult hit = player.pick(RAY_RANGE, 1.0f, false);
+        BlockPos pos = hit.getType() == HitResult.Type.BLOCK
+                ? ((BlockHitResult) hit).getBlockPos()
+                : player.blockPosition();
+        ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
+        player.sendSystemMessage(Component.literal(
+                "Removed " + removed + " chiseled blocks from chunk " + chunk.x() + "," + chunk.z() + "."));
         return InteractionResult.SUCCESS;
     }
 

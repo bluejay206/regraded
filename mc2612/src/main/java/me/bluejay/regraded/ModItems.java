@@ -25,6 +25,10 @@ public final class ModItems {
             .setId(key("remove_tool"))
             .stacksTo(1)));
 
+    public static final Item REMOVE_CHUNK = register("remove_chunk", new Item(new Item.Properties()
+            .setId(key("remove_chunk"))
+            .stacksTo(1)));
+
     public static final Item ADD_NODE = register("add_node", new Item(new Item.Properties()
             .setId(key("add_node"))
             .stacksTo(1)));

@@ -42,6 +42,11 @@ public final class RgCommands {
                                         .executes(ctx -> regradeChunk(ctx.getSource()))
                                         .then(Commands.literal("raycast")
                                                 .executes(ctx -> regradeChunkRaycast(ctx.getSource())))))
+                        .then(Commands.literal("remove")
+                                .then(Commands.literal("chunk")
+                                        .executes(ctx -> removeChunk(ctx.getSource()))
+                                        .then(Commands.literal("raycast")
+                                                .executes(ctx -> removeChunkRaycast(ctx.getSource())))))
                         .then(Commands.literal("clear")
                                 .executes(ctx -> {
                                     Points.clear();
@@ -132,8 +137,11 @@ public final class RgCommands {
         ServerLevel world = source.getLevel();
         BlockPos playerPos = BlockPos.containing(source.getPosition());
         ChunkPos chunk = new ChunkPos(playerPos.getX() >> 4, playerPos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
         RegradeQueue.enqueueChunk(world, chunk, source.getPlayer());
-        source.sendSuccess(() -> Component.literal("Queued chunk " + chunk.x() + "," + chunk.z() + " (" + RegradeQueue.size() + " columns)."), false);
+        source.sendSuccess(() -> Component.literal(
+                "Removed " + removed + " chiseled blocks, queued chunk " + chunk.x() + "," + chunk.z()
+                        + " (" + RegradeQueue.size() + " columns)."), false);
         return 1;
     }
 
@@ -155,9 +163,42 @@ public final class RgCommands {
         ServerLevel world = source.getLevel();
         BlockPos pos = ((BlockHitResult) hit).getBlockPos();
         ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
         RegradeQueue.enqueueChunk(world, chunk, player);
-        source.sendSuccess(() -> Component.literal("Queued chunk under raycast " + chunk.x() + "," + chunk.z() + " (" + RegradeQueue.size() + " columns)."), false);
+        source.sendSuccess(() -> Component.literal(
+                "Removed " + removed + " chiseled blocks, queued chunk under raycast " + chunk.x() + "," + chunk.z()
+                        + " (" + RegradeQueue.size() + " columns)."), false);
         return 1;
+    }
+
+    private static int removeChunk(CommandSourceStack source) {
+        ServerLevel world = source.getLevel();
+        BlockPos playerPos = BlockPos.containing(source.getPosition());
+        ChunkPos chunk = new ChunkPos(playerPos.getX() >> 4, playerPos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
+        source.sendSuccess(() -> Component.literal(
+                "Removed " + removed + " chiseled blocks from chunk " + chunk.x() + "," + chunk.z() + "."), false);
+        return removed;
+    }
+
+    private static int removeChunkRaycast(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Raycast requires a player."));
+            return 0;
+        }
+        HitResult hit = player.pick(RAY_RANGE, 1.0f, false);
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            source.sendFailure(Component.literal("No block in look direction."));
+            return 0;
+        }
+        ServerLevel world = source.getLevel();
+        BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+        ChunkPos chunk = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        int removed = Regrade.removeChunk(world, chunk);
+        source.sendSuccess(() -> Component.literal(
+                "Removed " + removed + " chiseled blocks from chunk under raycast " + chunk.x() + "," + chunk.z() + "."), false);
+        return removed;
     }
 
     private static void ensureWorld(CommandSourceStack source) {

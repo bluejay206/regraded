@@ -8,17 +8,24 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  * Tick-driven column queue. Regrade work is enqueued and drained a few
  * columns per server tick so C&B's mutator buffer stays empty between
  * targets. Each column opens one batch, writes its bits, and closes it
  * before the next column starts.
+ *
+ * Continuity: when a column's TIN crosses into an adjacent vertical block,
+ * that block is enqueued (with a specific target Y) so the plane stays
+ * contiguous. A processed set prevents re-processing the same (x,z,y).
  */
 public final class RegradeQueue {
     private static final int COLUMNS_PER_TICK = 4;
     private static final Queue<Job> QUEUE = new ArrayDeque<>();
+    private static final Set<String> ENQUEUED = new HashSet<>();
     private static boolean registered;
     private static int written;
     private static ServerPlayer reporter;
@@ -29,23 +36,36 @@ public final class RegradeQueue {
     public static boolean isEmpty() { return QUEUE.isEmpty(); }
 
     public static void enqueueColumn(ServerLevel world, int x, int z, ServerPlayer reporter) {
-        QUEUE.add(new Job(world, x, z));
+        add(world, x, z, null);
         RegradeQueue.reporter = reporter;
+        ensureRegistered();
+    }
+
+    /** Enqueue a specific block Y for continuity (called from Regrade.column). */
+    public static void enqueueColumnAt(ServerLevel world, int x, int z, int y) {
+        add(world, x, z, y);
         ensureRegistered();
     }
 
     public static void enqueueChunk(ServerLevel world, ChunkPos chunk, ServerPlayer reporter) {
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                QUEUE.add(new Job(world, (chunk.x() << 4) + x, (chunk.z() << 4) + z));
+                add(world, (chunk.x() << 4) + x, (chunk.z() << 4) + z, null);
             }
         }
         RegradeQueue.reporter = reporter;
         ensureRegistered();
     }
 
+    private static void add(ServerLevel world, int x, int z, Integer y) {
+        String key = x + "," + z + "," + (y == null ? "*" : y);
+        if (!ENQUEUED.add(key)) return;
+        QUEUE.add(new Job(world, x, z, y));
+    }
+
     public static void clear() {
         QUEUE.clear();
+        ENQUEUED.clear();
         written = 0;
     }
 
@@ -62,7 +82,7 @@ public final class RegradeQueue {
         while (!QUEUE.isEmpty() && done < COLUMNS_PER_TICK) {
             Job job = QUEUE.poll();
             try {
-                written += Regrade.column(job.world, job.x, job.z);
+                written += Regrade.column(job.world, job.x, job.z, job.y);
             } catch (Exception e) {
                 if (reporter != null) {
                     reporter.sendSystemMessage(Component.literal(
@@ -78,9 +98,10 @@ public final class RegradeQueue {
                     + (fail.isEmpty() ? "" : " [" + fail + "]") + ".";
             reporter.sendSystemMessage(Component.literal(msg));
             written = 0;
+            ENQUEUED.clear();
             reporter = null;
         }
     }
 
-    private record Job(ServerLevel world, int x, int z) {}
+    private record Job(ServerLevel world, int x, int z, Integer y) {}
 }

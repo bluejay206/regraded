@@ -2,6 +2,7 @@
   "item.regraded.regrade_tool": "Regrade Tool",
   "item.regraded.regrade_chunk": "Regrade Chunk",
   "item.regraded.remove_tool": "Remove Tool",
+  "item.regraded.remove_chunk": "Remove Chunk",
   "item.regraded.add_node": "Add Node",
   "item.regraded.add_node_player": "Add Node (Player)",
   "key.regraded.markers": "Toggle Markers",
