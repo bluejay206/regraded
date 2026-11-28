@@ -16,6 +16,7 @@ public class ReGradedClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         LOGGER.info("ReGraded client initialized (26.1.2)");
+        PointMarkers.registerRender();
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             String id = worldId(client);
