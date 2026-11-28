@@ -52,10 +52,10 @@ public final class ImportExportScreen extends Screen {
     }
 
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         if (!status.isEmpty()) {
-            graphics.drawString(this.font, status, this.width / 2 - 140, this.height - 48, 0xA0A0A0);
+            graphics.text(this.font, status, this.width / 2 - 140, this.height - 48, 0xFFA0A0A0, false);
         }
     }
 

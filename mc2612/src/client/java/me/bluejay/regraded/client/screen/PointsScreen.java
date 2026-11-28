@@ -2,7 +2,7 @@ package me.bluejay.regraded.client.screen;
 
 import me.bluejay.regraded.core.Points;
 import me.bluejay.regraded.core.SurveyPoint;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,16 +28,16 @@ public final class PointsScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         List<SurveyPoint> pts = Points.list().points();
         int y = 32 - scroll;
-        graphics.drawString(this.font, "Points: " + pts.size(), 16, 12, 0xFFFFFF);
+        graphics.text(this.font, "Points: " + pts.size(), 16, 12, 0xFFFFFFFF, false);
         for (SurveyPoint p : pts) {
             if (y > 24 && y < this.height - 36) {
                 String line = String.format("%s  E%.1f N%.1f Z%.1f  %s",
                         p.id(), p.easting(), p.northing(), p.elevation(), p.description());
-                graphics.drawString(this.font, line, 16, y, 0xA0A0A0);
+                graphics.text(this.font, line, 16, y, 0xFFA0A0A0, false);
             }
             y += 12;
         }

@@ -29,6 +29,46 @@ public final class PointList {
     }
 
     /**
+     * Remove the point whose (easting, northing) is closest to the given
+     * coordinates, if it is within {@code maxDist} blocks. Returns true if
+     * a point was removed.
+     */
+    public boolean removeNear(double easting, double northing, double maxDist) {
+        int best = -1;
+        double bestD = maxDist * maxDist;
+        for (int i = 0; i < points.size(); i++) {
+            SurveyPoint p = points.get(i);
+            double dx = p.easting() - easting;
+            double dz = p.northing() - northing;
+            double d = dx * dx + dz * dz;
+            if (d <= bestD) {
+                bestD = d;
+                best = i;
+            }
+        }
+        if (best < 0) return false;
+        points.remove(best);
+        return true;
+    }
+
+    /** Index of the point within maxDist of (easting, northing), or -1. */
+    public int nearestIndex(double easting, double northing, double maxDist) {
+        int best = -1;
+        double bestD = maxDist * maxDist;
+        for (int i = 0; i < points.size(); i++) {
+            SurveyPoint p = points.get(i);
+            double dx = p.easting() - easting;
+            double dz = p.northing() - northing;
+            double d = dx * dx + dz * dz;
+            if (d <= bestD) {
+                bestD = d;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Import PNEZD-style CSV.
      * Expected columns: Point, Northing, Easting, Elevation, Description (optional).
      * Header row is skipped. Returns number of points added.
